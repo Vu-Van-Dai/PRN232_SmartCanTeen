@@ -1,10 +1,12 @@
-﻿using Application.DTOs;
+﻿using API.Hubs;
+using Application.DTOs;
 using Application.Payments;
 using Core.Entities;
 using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
@@ -18,15 +20,18 @@ namespace API.Controllers
         private readonly AppDbContext _db;
         private readonly ICurrentCampusService _campus;
         private readonly VnpayService _vnpay;
+        private readonly IHubContext<ManagementHub> _managementHub;
 
         public PosOrderController(
             AppDbContext db,
             ICurrentCampusService campus,
-            VnpayService vnpay)
+            VnpayService vnpay,
+            IHubContext<ManagementHub> managementHub)
         {
             _db = db;
             _campus = campus;
             _vnpay = vnpay;
+            _managementHub = managementHub;
         }
 
         /// <summary>
@@ -42,6 +47,16 @@ namespace API.Controllers
                 User.FindFirstValue(ClaimTypes.NameIdentifier)!
             );
 
+            var today = DateTime.UtcNow.Date;
+
+            var dayLocked = await _db.DailyRevenues.AnyAsync(x =>
+                x.CampusId == _campus.CampusId &&
+                x.Date == today
+            );
+
+            if (dayLocked)
+                return BadRequest("Day already closed");
+
             // 1️⃣ LẤY CA ĐANG MỞ
             var shift = await _db.Shifts.FirstOrDefaultAsync(x =>
                 x.UserId == staffId &&
@@ -50,7 +65,7 @@ namespace API.Controllers
             );
 
             if (shift == null)
-                return BadRequest("No open shift");
+                return BadRequest("No open shift or shift is locked");
 
             // 2️⃣ TẠO ORDER
             var order = new Order
@@ -115,7 +130,15 @@ namespace API.Controllers
             });
 
             await _db.SaveChangesAsync();
-
+            await _managementHub.Clients
+                .Group($"campus-{_campus.CampusId}")
+                .SendAsync("OrderCreated", new
+                {
+                    orderId = order.Id,
+                    shiftId = shift.Id,
+                    total = order.TotalPrice,
+                    method = PaymentMethod.Qr
+                });
             // 5️⃣ TẠO QR URL
             var qrUrl = _vnpay.CreatePaymentUrl(
                 request.TotalPrice,

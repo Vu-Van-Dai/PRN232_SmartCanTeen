@@ -25,7 +25,7 @@ public class AppDbContext : DbContext
     public DbSet<Campus> Campuses => Set<Campus>();
     public DbSet<StaffAssignment> StaffAssignments => Set<StaffAssignment>();
     public DbSet<UserRelation> UserRelations => Set<UserRelation>();
-
+    public DbSet<DailyRevenue> DailyRevenues => Set<DailyRevenue>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<MenuItem> MenuItems => Set<MenuItem>();
     public DbSet<InventoryLog> InventoryLogs => Set<InventoryLog>();
@@ -68,7 +68,21 @@ public class AppDbContext : DbContext
             .HasQueryFilter(x =>
                 _campusId == Guid.Empty || x.CampusId == _campusId
             );
+        modelBuilder.Entity<DailyRevenue>(entity =>
+        {
+            entity.HasKey(x => x.Id);
 
+            entity.HasIndex(x => new { x.CampusId, x.Date })
+                  .IsUnique();
+
+            entity.HasOne(x => x.Campus)
+                  .WithMany()
+                  .HasForeignKey(x => x.CampusId);
+
+            entity.HasOne(x => x.ClosedByUser)
+                  .WithMany()
+                  .HasForeignKey(x => x.ClosedByUserId);
+        });
         //seed data
 
         var campusId = new Guid("11111111-1111-1111-1111-111111111111");
@@ -386,5 +400,30 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(x => x.PerformedByUserId);
         });
+    }
+    public override int SaveChanges()
+    {
+        PreventUpdateClosedShift();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        PreventUpdateClosedShift();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void PreventUpdateClosedShift()
+    {
+        var modifiedShifts = ChangeTracker.Entries<Shift>()
+            .Where(e => e.State == EntityState.Modified)
+            .Select(e => e.Entity);
+
+        foreach (var shift in modifiedShifts)
+        {
+            if (shift.Status == ShiftStatus.Closed)
+                throw new InvalidOperationException("Closed shift cannot be modified");
+        }
     }
 }
