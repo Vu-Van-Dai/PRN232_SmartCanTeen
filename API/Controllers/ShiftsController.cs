@@ -1,9 +1,11 @@
-﻿using Application.DTOs;
+﻿using API.Hubs;
+using Application.DTOs;
 using Core.Entities;
 using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
@@ -16,11 +18,12 @@ namespace API.Controllers
     {
         private readonly AppDbContext _db;
         private readonly ICurrentCampusService _campus;
-
-        public ShiftsController(AppDbContext db, ICurrentCampusService campus)
+        private readonly IHubContext<ManagementHub> _managementHub;
+        public ShiftsController(AppDbContext db, ICurrentCampusService campus, IHubContext<ManagementHub> managementHub)
         {
             _db = db;
             _campus = campus;
+            _managementHub = managementHub;
         }
 
         // =========================
@@ -50,7 +53,14 @@ namespace API.Controllers
 
             _db.Shifts.Add(shift);
             await _db.SaveChangesAsync();
-
+            await _managementHub.Clients
+                .Group($"campus-{_campus.CampusId}")
+                .SendAsync("ShiftOpened", new
+                {
+                    shiftId = shift.Id,
+                    staffId = shift.UserId,
+                    openedAt = shift.OpenedAt
+                });
             return Ok(shift.Id);
         }
 
@@ -124,7 +134,16 @@ namespace API.Controllers
             shift.ClosedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
-
+            await _managementHub.Clients
+                .Group($"campus-{shift.CampusId}")
+                .SendAsync("ShiftClosed", new
+                {
+                    shiftId = shift.Id,
+                    staffId = shift.UserId,
+                    cash = shift.SystemCashTotal,
+                    qr = shift.SystemQrTotal,
+                    online = shift.SystemOnlineTotal
+                });
             // TODO: force logout
             return Ok();
         }

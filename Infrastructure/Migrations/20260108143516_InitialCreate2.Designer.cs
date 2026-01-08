@@ -3,6 +3,7 @@ using System;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260108143516_InitialCreate2")]
+    partial class InitialCreate2
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -91,46 +94,6 @@ namespace Infrastructure.Migrations
                     b.HasIndex("CampusId");
 
                     b.ToTable("Categories");
-                });
-
-            modelBuilder.Entity("Core.Entities.DailyRevenue", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CampusId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("ClosedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("ClosedByUserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("TotalCash")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("TotalOnline")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("TotalQr")
-                        .HasColumnType("numeric");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClosedByUserId");
-
-                    b.HasIndex("CampusId", "Date")
-                        .IsUnique();
-
-                    b.ToTable("DailyRevenues");
                 });
 
             modelBuilder.Entity("Core.Entities.InventoryLog", b =>
@@ -670,25 +633,6 @@ namespace Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Campus");
-                });
-
-            modelBuilder.Entity("Core.Entities.DailyRevenue", b =>
-                {
-                    b.HasOne("Core.Entities.Campus", "Campus")
-                        .WithMany()
-                        .HasForeignKey("CampusId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Core.Entities.User", "ClosedByUser")
-                        .WithMany()
-                        .HasForeignKey("ClosedByUserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Campus");
-
-                    b.Navigation("ClosedByUser");
                 });
 
             modelBuilder.Entity("Core.Entities.InventoryLog", b =>

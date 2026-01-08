@@ -66,6 +66,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapHub<OrderHub>("/hubs/order");
+app.MapHub<ManagementHub>("/hubs/management");
 
 app.MapControllers();
 

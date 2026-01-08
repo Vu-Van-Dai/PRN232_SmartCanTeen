@@ -1,5 +1,6 @@
 ﻿using API.Hubs;
 using Application.Orders.Services;
+using Core.Entities;
 using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
@@ -15,15 +16,18 @@ namespace API.Controllers
         private readonly AppDbContext _db;
         private readonly IHubContext<OrderHub> _hub;
         private readonly InventoryService _inventoryService;
+        private readonly IHubContext<ManagementHub> _managementHub;
 
         public VnpayController(
             AppDbContext db,
             IHubContext<OrderHub> hub,
-            InventoryService inventoryService)
+            InventoryService inventoryService,
+            IHubContext<ManagementHub> managementHub)
         {
             _db = db;
             _hub = hub;
             _inventoryService = inventoryService;
+            _managementHub = managementHub;
         }
 
         /// <summary>
@@ -46,11 +50,12 @@ namespace API.Controllers
 
             using var dbTx = await _db.Database.BeginTransactionAsync();
 
+            Order? order = null;
             txn.IsSuccess = true;
 
             if (txn.Purpose == PaymentPurpose.OfflineOrder)
             {
-                var order = await _db.Orders
+                 order = await _db.Orders
                     .Include(o => o.Items)
                     .FirstOrDefaultAsync(o => o.Id == txn.OrderId);
 
@@ -61,10 +66,12 @@ namespace API.Controllers
 
                 // cộng QR cho ca
                 var shift = await _db.Shifts.FindAsync(txn.ShiftId);
-                if (shift != null)
+                if (shift == null || shift.Status != ShiftStatus.Open)
                 {
-                    shift.SystemQrTotal += txn.Amount;
+                    return Ok(); // KHÔNG xử lý thêm
                 }
+
+                shift.SystemQrTotal += txn.Amount;
 
                 // TRỪ KHO + INVENTORY LOG
                 await _inventoryService.DeductInventoryAsync(
@@ -75,7 +82,18 @@ namespace API.Controllers
 
             await _db.SaveChangesAsync();
             await dbTx.CommitAsync();
-
+            if (txn.Purpose == PaymentPurpose.OfflineOrder && txn.ShiftId != null)
+            {
+                await _managementHub.Clients
+                    .Group($"campus-{order!.CampusId}")
+                    .SendAsync("OrderPaid", new
+                    {
+                        orderId = order.Id,
+                        shiftId = order.ShiftId,
+                        amount = txn.Amount,
+                        method = PaymentMethod.Qr
+                    });
+            }
             // SIGNALR → POS
             if (txn.Purpose == PaymentPurpose.OfflineOrder && txn.ShiftId != null)
             {
