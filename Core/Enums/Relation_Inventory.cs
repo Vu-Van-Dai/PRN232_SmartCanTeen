@@ -15,9 +15,9 @@ namespace Core.Enums
 
     public enum InventoryLogReason
     {
-        Sale = 0,
-        Damage = 1,
-        Expired = 2,
-        Adjustment = 3
+        Sale = 1,
+        Damage = 2,
+        Expired = 3,
+        Adjustment = 4
     }
 }

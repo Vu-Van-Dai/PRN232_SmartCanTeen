@@ -10,8 +10,7 @@ namespace Core.Entities
 {
     public class VnpayTransaction : BaseEntity
     {
-        public Guid Id { get; set; }
-
+        public Guid PerformedByUserId { get; set; }
         public string VnpTxnRef { get; set; } = null!;
         public decimal Amount { get; set; }
 

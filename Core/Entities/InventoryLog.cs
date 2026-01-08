@@ -16,11 +16,13 @@ namespace Core.Entities
         public Guid ItemId { get; set; }
         public MenuItem Item { get; set; } = default!;
 
+        // Số lượng thay đổi (+ / -)
         public int ChangeQuantity { get; set; }
+
         public InventoryLogReason Reason { get; set; }
 
+        // Tham chiếu Order / Shift
         public Guid? ReferenceId { get; set; }
-        public string? Note { get; set; }
 
         public Guid PerformedByUserId { get; set; }
         public User PerformedByUser { get; set; } = default!;

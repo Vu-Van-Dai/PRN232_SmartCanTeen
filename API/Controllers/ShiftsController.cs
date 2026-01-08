@@ -44,7 +44,7 @@ namespace API.Controllers
                 Id = Guid.NewGuid(),
                 UserId = userId,
                 CampusId = _campus.CampusId,
-                StartTime = DateTime.UtcNow,
+                OpenedAt = DateTime.UtcNow,
                 Status = ShiftStatus.Open
             };
 
@@ -60,9 +60,9 @@ namespace API.Controllers
         [HttpPost("start-declare")]
         public async Task<IActionResult> StartDeclare()
         {
-            var shift = await GetCurrentShift();
-            if (shift.Status != ShiftStatus.Open)
-                return BadRequest("Invalid state");
+            var shift = await GetCurrentShiftOrNull();
+            if (shift == null)
+                return BadRequest("No active shift");
 
             shift.Status = ShiftStatus.StaffDeclaring;
             await _db.SaveChangesAsync();
@@ -76,9 +76,9 @@ namespace API.Controllers
         [HttpPost("start-counting")]
         public async Task<IActionResult> StartCounting()
         {
-            var shift = await GetCurrentShift();
-            if (shift.Status != ShiftStatus.StaffDeclaring)
-                return BadRequest("Invalid state");
+            var shift = await GetCurrentShiftOrNull();
+            if (shift == null)
+                return BadRequest("No active shift");
 
             shift.Status = ShiftStatus.Counting;
             await _db.SaveChangesAsync();
@@ -92,14 +92,14 @@ namespace API.Controllers
         [HttpPost("confirm")]
         public async Task<IActionResult> Confirm(StaffConfirmRequest request)
         {
-            var shift = await GetCurrentShift();
-            if (shift.Status != ShiftStatus.Counting)
-                return BadRequest("Invalid state");
+            var shift = await GetCurrentShiftOrNull();
+            if (shift == null)
+                return BadRequest("No active shift");
 
             if (request.Cash != shift.SystemCashTotal ||
                 request.Qr != shift.SystemQrTotal)
             {
-                return BadRequest("Amount must match system total");
+                return BadRequest("Invalid declared amount");
             }
 
             shift.StaffCashInput = request.Cash;
@@ -116,12 +116,12 @@ namespace API.Controllers
         [HttpPost("close")]
         public async Task<IActionResult> Close()
         {
-            var shift = await GetCurrentShift();
-            if (shift.Status != ShiftStatus.WaitingConfirm)
-                return BadRequest("Invalid state");
+            var shift = await GetCurrentShiftOrNull();
+            if (shift == null)
+                return BadRequest("No active shift");
 
             shift.Status = ShiftStatus.Closed;
-            shift.EndTime = DateTime.UtcNow;
+            shift.ClosedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
 
@@ -132,14 +132,15 @@ namespace API.Controllers
         // =========================
         // HELPER
         // =========================
-        private async Task<Shift> GetCurrentShift()
+        private async Task<Shift?> GetCurrentShiftOrNull()
         {
             var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-            return await _db.Shifts.FirstAsync(x =>
+            return await _db.Shifts.FirstOrDefaultAsync(x =>
                 x.UserId == userId &&
                 x.CampusId == _campus.CampusId &&
                 x.Status != ShiftStatus.Closed);
         }
+        // Không cho mở ca mới nếu còn ca đang Open / Declaring / Counting / WaitingConfirm
     }
 }

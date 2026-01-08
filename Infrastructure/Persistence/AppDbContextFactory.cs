@@ -16,7 +16,7 @@ namespace Infrastructure.Persistence
             var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
 
             optionsBuilder.UseNpgsql(
-                "Host=localhost;Port=5432;Database=SmartCanteen;Username=postgres;Password=181124AD");
+                "Host=localhost;Port=5432;Database=SmartCanteenV1;Username=postgres;Password=181124AD");
 
             return new AppDbContext(optionsBuilder.Options, null);
         }

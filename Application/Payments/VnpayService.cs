@@ -17,17 +17,14 @@ namespace Application.Payments
             _config = config;
         }
 
-        public string CreatePaymentUrl(
-            decimal amount,
-            string txnRef,
-            string orderInfo)
+        public string CreatePaymentUrl(decimal amount, string txnRef, string orderInfo)
         {
-            var vnpay = new SortedDictionary<string, string>
+            var vnpParams = new SortedDictionary<string, string>
             {
                 ["vnp_Version"] = "2.1.0",
                 ["vnp_Command"] = "pay",
                 ["vnp_TmnCode"] = _config["Vnpay:TmnCode"]!,
-                ["vnp_Amount"] = ((int)(amount * 100)).ToString(),
+                ["vnp_Amount"] = ((long)(amount * 100)).ToString(),
                 ["vnp_CurrCode"] = "VND",
                 ["vnp_TxnRef"] = txnRef,
                 ["vnp_OrderInfo"] = orderInfo,
@@ -38,10 +35,10 @@ namespace Application.Payments
                 ["vnp_CreateDate"] = DateTime.UtcNow.ToString("yyyyMMddHHmmss")
             };
 
-            var hashData = string.Join("&", vnpay.Select(x => $"{x.Key}={x.Value}"));
-            var secureHash = HmacSHA512(hashData, _config["Vnpay:HashSecret"]!);
+            var query = string.Join("&", vnpParams.Select(x => $"{x.Key}={x.Value}"));
+            var secureHash = HmacSHA512(query, _config["Vnpay:HashSecret"]!);
 
-            return $"{_config["Vnpay:BaseUrl"]}?{hashData}&vnp_SecureHash={secureHash}";
+            return $"{_config["Vnpay:BaseUrl"]}?{query}&vnp_SecureHash={secureHash}";
         }
 
         private static string HmacSHA512(string input, string key)

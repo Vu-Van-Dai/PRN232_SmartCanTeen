@@ -111,9 +111,6 @@ namespace Infrastructure.Migrations
                     b.Property<Guid>("ItemId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("Note")
-                        .HasColumnType("text");
-
                     b.Property<Guid>("PerformedByUserId")
                         .HasColumnType("uuid");
 
@@ -316,10 +313,13 @@ namespace Infrastructure.Migrations
                     b.Property<Guid>("CampusId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("EndTime")
+                    b.Property<DateTime>("OpenedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<decimal?>("StaffCashInput")
@@ -329,9 +329,6 @@ namespace Infrastructure.Migrations
                     b.Property<decimal?>("StaffQrInput")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
-
-                    b.Property<DateTime>("StartTime")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -516,6 +513,45 @@ namespace Infrastructure.Migrations
                             UserId = new Guid("22222222-2222-2222-2222-222222222222"),
                             RoleId = 1
                         });
+                });
+
+            modelBuilder.Entity("Core.Entities.VnpayTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("OrderId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PerformedByUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Purpose")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ShiftId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("VnpTxnRef")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("WalletId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("VnpayTransactions");
                 });
 
             modelBuilder.Entity("Core.Entities.Wallet", b =>

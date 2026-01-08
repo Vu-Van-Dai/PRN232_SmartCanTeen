@@ -1,6 +1,9 @@
-﻿using Core.Enums;
+﻿using API.Hubs;
+using Application.Orders.Services;
+using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace API.Controllers
@@ -9,37 +12,83 @@ namespace API.Controllers
     [Route("api/vnpay")]
     public class VnpayController : ControllerBase
     {
-        [HttpGet("ipn")]
-        public async Task<IActionResult> Ipn(
+        private readonly AppDbContext _db;
+        private readonly IHubContext<OrderHub> _hub;
+        private readonly InventoryService _inventoryService;
+
+        public VnpayController(
             AppDbContext db,
-            IConfiguration config)
+            IHubContext<OrderHub> hub,
+            InventoryService inventoryService)
         {
-            var vnpTxnRef = Request.Query["vnp_TxnRef"].ToString();
+            _db = db;
+            _hub = hub;
+            _inventoryService = inventoryService;
+        }
+
+        /// <summary>
+        /// VNPAY IPN CALLBACK
+        /// </summary>
+        [HttpGet("ipn")]
+        public async Task<IActionResult> Ipn()
+        {
+            var txnRef = Request.Query["vnp_TxnRef"].ToString();
             var responseCode = Request.Query["vnp_ResponseCode"].ToString();
 
-            var txn = await db.VnpayTransactions
-                .FirstAsync(x => x.VnpTxnRef == vnpTxnRef);
-
             if (responseCode != "00")
-                return Ok();
+                return Ok(); // failed
+
+            var txn = await _db.VnpayTransactions
+                .FirstOrDefaultAsync(x => x.VnpTxnRef == txnRef);
+
+            if (txn == null || txn.IsSuccess)
+                return Ok(); // idempotent
+
+            using var dbTx = await _db.Database.BeginTransactionAsync();
 
             txn.IsSuccess = true;
 
-            if (txn.Purpose == PaymentPurpose.WalletTopup)
-            {
-                var wallet = await db.Wallets.FindAsync(txn.WalletId);
-                wallet!.Balance += txn.Amount;
-            }
-
             if (txn.Purpose == PaymentPurpose.OfflineOrder)
             {
-                var shift = await db.Shifts.FindAsync(txn.ShiftId);
-                shift!.SystemQrTotal += txn.Amount;
+                var order = await _db.Orders
+                    .Include(o => o.Items)
+                    .FirstOrDefaultAsync(o => o.Id == txn.OrderId);
+
+                if (order == null || order.Status != OrderStatus.Pending)
+                    return Ok();
+
+                order.Status = OrderStatus.Paid;
+
+                // cộng QR cho ca
+                var shift = await _db.Shifts.FindAsync(txn.ShiftId);
+                if (shift != null)
+                {
+                    shift.SystemQrTotal += txn.Amount;
+                }
+
+                // TRỪ KHO + INVENTORY LOG
+                await _inventoryService.DeductInventoryAsync(
+                    order,
+                    order.OrderedByUserId
+                );
             }
 
-            await db.SaveChangesAsync();
+            await _db.SaveChangesAsync();
+            await dbTx.CommitAsync();
+
+            // SIGNALR → POS
+            if (txn.Purpose == PaymentPurpose.OfflineOrder && txn.ShiftId != null)
+            {
+                await _hub.Clients
+                    .Group(txn.ShiftId.ToString()!)
+                    .SendAsync("OrderPaid", new
+                    {
+                        orderId = txn.OrderId,
+                        amount = txn.Amount
+                    });
+            }
+
             return Ok();
         }
     }
-
 }
