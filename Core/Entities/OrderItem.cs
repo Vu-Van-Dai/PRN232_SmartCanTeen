@@ -16,6 +16,8 @@ namespace Core.Entities
         public MenuItem Item { get; set; } = default!;
 
         public int Quantity { get; set; }
+
+        // Snapshot price tại thời điểm mua
         public decimal UnitPrice { get; set; }
     }
 }
