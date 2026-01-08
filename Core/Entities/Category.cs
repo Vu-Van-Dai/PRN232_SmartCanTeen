@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Core.Entities
 {
-    public class Category : BaseEntity
+    public class Category : BaseEntity, ISoftDelete
     {
         public Guid CampusId { get; set; }
         public Campus Campus { get; set; } = default!;

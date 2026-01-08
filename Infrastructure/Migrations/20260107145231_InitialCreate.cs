@@ -4,6 +4,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
+#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
+
 namespace Infrastructure.Migrations
 {
     /// <inheritdoc />
@@ -226,6 +228,7 @@ namespace Infrastructure.Migrations
                     Name = table.Column<string>(type: "text", nullable: false),
                     Price = table.Column<decimal>(type: "numeric", nullable: false),
                     InventoryQuantity = table.Column<int>(type: "integer", nullable: false),
+                    ImageUrl = table.Column<string>(type: "text", nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
                     xmin = table.Column<long>(type: "bigint", nullable: false),
@@ -428,6 +431,38 @@ namespace Infrastructure.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
                 });
+
+            migrationBuilder.InsertData(
+                table: "Campuses",
+                columns: new[] { "Id", "Code", "Config", "CreatedAt", "IsActive", "Name" },
+                values: new object[] { new Guid("11111111-1111-1111-1111-111111111111"), "FPTU_DN", null, new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), true, "FPT University Da Nang" });
+
+            migrationBuilder.InsertData(
+                table: "Roles",
+                columns: new[] { "Id", "Name" },
+                values: new object[,]
+                {
+                    { 1, "Admin" },
+                    { 2, "Manager" },
+                    { 3, "Staff" },
+                    { 4, "Student" },
+                    { 5, "Parent" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "Users",
+                columns: new[] { "Id", "CreatedAt", "Email", "FullName", "IsActive", "IsDeleted", "PasswordHash" },
+                values: new object[] { new Guid("22222222-2222-2222-2222-222222222222"), new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@canteen.com", "System Admin", true, false, "HASHED_PASSWORD" });
+
+            migrationBuilder.InsertData(
+                table: "UserRoles",
+                columns: new[] { "RoleId", "UserId" },
+                values: new object[] { 1, new Guid("22222222-2222-2222-2222-222222222222") });
+
+            migrationBuilder.InsertData(
+                table: "Wallets",
+                columns: new[] { "Id", "Balance", "CampusId", "ClosedAt", "CreatedAt", "Status", "UserId" },
+                values: new object[] { new Guid("33333333-3333-3333-3333-333333333333"), 0m, new Guid("11111111-1111-1111-1111-111111111111"), null, new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 0, new Guid("22222222-2222-2222-2222-222222222222") });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Campuses_Code",
