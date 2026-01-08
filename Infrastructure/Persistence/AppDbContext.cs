@@ -1,4 +1,6 @@
-﻿using Core.Entities;
+﻿using Core.Common;
+using Core.Entities;
+using Core.Enums;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Reflection.Emit;
@@ -7,9 +9,13 @@ namespace Infrastructure.Persistence;
 
 public class AppDbContext : DbContext
 {
-    public AppDbContext(DbContextOptions<AppDbContext> options)
+    private readonly ICurrentCampusService _currentCampus;
+    private readonly Guid _campusId;
+    public AppDbContext(DbContextOptions<AppDbContext> options, ICurrentCampusService? currentCampus = null)
         : base(options)
     {
+        _currentCampus = currentCampus;
+        _campusId = currentCampus?.CampusId ?? Guid.Empty;
     }
 
     // ========= DbSets =========
@@ -31,11 +37,95 @@ public class AppDbContext : DbContext
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
+    public DbSet<VnpayTransaction> VnpayTransactions => Set<VnpayTransaction>();
 
     // ========= Fluent API =========
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<User>()
+            .HasQueryFilter(x => !x.IsDeleted);
+
+        modelBuilder.Entity<MenuItem>()
+            .HasQueryFilter(x =>
+                !x.IsDeleted &&
+                (_campusId == Guid.Empty || x.CampusId == _campusId)
+            );
+
+        modelBuilder.Entity<Category>()
+            .HasQueryFilter(x =>
+                !x.IsDeleted &&
+                (_campusId == Guid.Empty || x.CampusId == _campusId)
+            );
+
+        modelBuilder.Entity<Order>()
+            .HasQueryFilter(x =>
+                _campusId == Guid.Empty || x.CampusId == _campusId
+            );
+
+        modelBuilder.Entity<Transaction>()
+            .HasQueryFilter(x =>
+                _campusId == Guid.Empty || x.CampusId == _campusId
+            );
+
+        //seed data
+
+        var campusId = new Guid("11111111-1111-1111-1111-111111111111");
+
+        modelBuilder.Entity<Campus>().HasData(
+            new Campus
+            {
+                Id = campusId,
+                Code = "FPTU_DN",
+                Name = "FPT University Da Nang",
+                IsActive = true,
+                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
+        );
+
+        modelBuilder.Entity<Role>().HasData(
+            new Role { Id = 1, Name = "Admin" },
+            new Role { Id = 2, Name = "Manager" },
+            new Role { Id = 3, Name = "Staff" },
+            new Role { Id = 4, Name = "Student" },
+            new Role { Id = 5, Name = "Parent" }
+        );
+
+        var adminId = new Guid("22222222-2222-2222-2222-222222222222");
+
+        modelBuilder.Entity<User>().HasData(
+            new User
+            {
+                Id = adminId,
+                Email = "admin@canteen.com",
+                PasswordHash = "HASHED_PASSWORD",
+                FullName = "System Admin",
+                IsActive = true,
+                IsDeleted = false,
+                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
+        );
+
+        modelBuilder.Entity<UserRole>().HasData(
+            new UserRole
+            {
+                UserId = adminId,
+                RoleId = 1
+            }
+        );
+
+        modelBuilder.Entity<Wallet>().HasData(
+            new Wallet
+            {
+                Id = new Guid("33333333-3333-3333-3333-333333333333"),
+                UserId = adminId,
+                CampusId = campusId,
+                Balance = 0,
+                Status = WalletStatus.Active,
+                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
+        );
 
         // =========================
         // USERS
@@ -226,6 +316,14 @@ public class AppDbContext : DbContext
             entity.HasOne(x => x.User)
                   .WithMany()
                   .HasForeignKey(x => x.UserId);
+
+            entity.Property(x => x.SystemCashTotal).HasPrecision(18, 2);
+            entity.Property(x => x.SystemQrTotal).HasPrecision(18, 2);
+            entity.Property(x => x.SystemOnlineTotal).HasPrecision(18, 2);
+
+            entity.Property(x => x.StaffCashInput).HasPrecision(18, 2);
+            entity.Property(x => x.StaffQrInput).HasPrecision(18, 2);
+
         });
 
         // =========================

@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Core.Entities
 {
-    public class MenuItem : BaseEntity
+    public class MenuItem : BaseEntity, ISoftDelete
     {
         public Guid CampusId { get; set; }
         public Campus Campus { get; set; } = default!;
@@ -20,6 +20,7 @@ namespace Core.Entities
         public decimal Price { get; set; }
 
         public int InventoryQuantity { get; set; }
+        public string? ImageUrl { get; set; }
 
         public bool IsActive { get; set; } = true;
         public bool IsDeleted { get; set; } = false;

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace Core.Entities
 {
-    public class User : BaseEntity
+    public class User : BaseEntity, ISoftDelete
     {
         public string Email { get; set; } = default!;
         public string PasswordHash { get; set; } = default!;
