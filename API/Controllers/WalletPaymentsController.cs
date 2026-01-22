@@ -76,7 +76,19 @@ namespace API.Controllers
             });
 
             // 3️⃣ UPDATE ORDER
-            order.Status = OrderStatus.Paid;
+            if (order.OrderSource == OrderSource.Online)
+            {
+                if (order.PickupTime == null)
+                {
+                    order.Status = OrderStatus.Preparing;
+                    order.IsUrgent = true;
+                }
+                else
+                {
+                    order.Status = OrderStatus.SystemHolding;
+                    order.IsUrgent = false;
+                }
+            }
             order.PaymentMethod = PaymentMethod.Wallet;
 
             // 4️⃣ TRỪ KHO + INVENTORY LOG

@@ -6,6 +6,7 @@ namespace Application.DTOs
     public class CreateOnlineOrderRequest
     {
         public List<CreateOrderItemDto> Items { get; set; } = new();
+        public DateTime PickupTime { get; set; }
     }
 
     public class CreateOrderItemDto

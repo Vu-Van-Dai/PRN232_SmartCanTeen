@@ -34,7 +34,9 @@ namespace Core.Entities
         public decimal SubTotal { get; set; }
         public decimal DiscountAmount { get; set; }
         public decimal TotalPrice { get; set; }
-
+        //===== Kitchen ====
+        public DateTime? PickupTime { get; set; }   // Giờ khách muốn lấy
+        public bool IsUrgent { get; set; }           // Cần nấu gấp
         public ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
     }
 }

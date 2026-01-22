@@ -103,7 +103,8 @@ public class AppDbContext : DbContext
             new Role { Id = 2, Name = "Manager" },
             new Role { Id = 3, Name = "Staff" },
             new Role { Id = 4, Name = "Student" },
-            new Role { Id = 5, Name = "Parent" }
+            new Role { Id = 5, Name = "Parent" },
+            new Role { Id = 6, Name = "Kitchen" }
         );
 
         var adminId = new Guid("22222222-2222-2222-2222-222222222222");
