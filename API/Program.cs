@@ -2,6 +2,7 @@ using API.Hubs;
 using Application.JWTToken;
 using Application.Orders.Services;
 using Application.Payments;
+using Core.Common;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -28,6 +29,7 @@ builder.Services.AddScoped<ICurrentCampusService, CurrentCampusService>();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<VnpayService>();
 builder.Services.AddScoped<InventoryService>();
+builder.Services.AddScoped<IInventoryNotifier, InventoryNotifier>();
 
 builder.Services.AddSignalR();
 
