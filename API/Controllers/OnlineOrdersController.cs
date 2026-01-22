@@ -63,7 +63,14 @@ namespace API.Controllers
                 OrderedByUserId = userId,
 
                 OrderSource = OrderSource.Online,
+                PaymentMethod = PaymentMethod.Wallet,
                 Status = OrderStatus.Pending,
+
+                PickupTime = request.PickupTime,
+                IsUrgent = request.PickupTime == null,
+
+                SubTotal = total,
+                TotalPrice = total,
 
                 CreatedAt = DateTime.UtcNow
             };

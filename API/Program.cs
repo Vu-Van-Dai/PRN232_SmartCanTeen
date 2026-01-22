@@ -30,6 +30,8 @@ builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<VnpayService>();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<IInventoryNotifier, InventoryNotifier>();
+builder.Services.AddScoped<OrderSchedulerService>();
+builder.Services.AddHostedService<OrderSchedulerHostedService>();
 
 builder.Services.AddSignalR();
 
@@ -69,6 +71,7 @@ app.UseAuthorization();
 
 app.MapHub<OrderHub>("/hubs/order");
 app.MapHub<ManagementHub>("/hubs/management");
+app.MapHub<KitchenHub>("/hubs/kitchen");
 
 app.MapControllers();
 

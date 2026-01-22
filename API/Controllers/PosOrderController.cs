@@ -87,6 +87,9 @@ namespace API.Controllers
                 PaymentMethod = PaymentMethod.Qr,
                 Status = OrderStatus.Pending,
 
+                PickupTime = null,
+                IsUrgent = true,
+
                 SubTotal = request.TotalPrice,
                 DiscountAmount = 0,
                 TotalPrice = request.TotalPrice,

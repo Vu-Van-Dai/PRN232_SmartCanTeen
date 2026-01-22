@@ -69,7 +69,28 @@ namespace API.Controllers
                     if (shift == null || shift.Status != ShiftStatus.Open)
                         throw new Exception("Invalid shift");
 
-                    order.Status = OrderStatus.Paid;
+                    if (order.OrderSource == OrderSource.Offline)
+                    {
+                        // POS: LUÔN NẤU NGAY
+                        order.Status = OrderStatus.Preparing;
+                        order.IsUrgent = true;
+                    }
+                    else
+                    {
+                        // ONLINE
+                        if (order.PickupTime == null)
+                        {
+                            // Online ăn liền
+                            order.Status = OrderStatus.Preparing;
+                            order.IsUrgent = true;
+                        }
+                        else
+                        {
+                            // Online đặt trước
+                            order.Status = OrderStatus.SystemHolding;
+                            order.IsUrgent = false;
+                        }
+                    }
                     shift.SystemQrTotal += txn.Amount;
 
                     await _inventoryService.DeductInventoryAsync(

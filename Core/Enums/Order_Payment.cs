@@ -17,7 +17,10 @@ namespace Core.Enums
     }
     public enum OrderStatus { 
         Pending = 1, 
-        Paid = 2, 
-        Cancelled = 3 
+        Paid = 2,
+        SystemHolding = 3,  // Hệ thống giữ (pre-order)
+        Preparing = 4,      // Đang nấu
+        Ready = 5,
+        Cancelled = 6 
     }
 }
