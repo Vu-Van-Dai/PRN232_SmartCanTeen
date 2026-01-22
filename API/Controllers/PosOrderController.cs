@@ -33,6 +33,14 @@ namespace API.Controllers
             _vnpay = vnpay;
             _managementHub = managementHub;
         }
+        //helper
+        public async Task<bool> IsDayLocked(DateTime date)
+        {
+            return await _db.DailyRevenues.AnyAsync(x =>
+                x.CampusId == _campus.CampusId &&
+                x.Date == date.Date
+            );
+        }
 
         /// <summary>
         /// Tạo Order OFFLINE + QR

@@ -1,17 +1,20 @@
-﻿using Core.Entities;
+﻿using Core.Common;
+using Core.Entities;
 using Core.Enums;
-using Microsoft.EntityFrameworkCore;
 using Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace Application.Orders.Services
 {
     public class InventoryService
     {
         private readonly AppDbContext _db;
+        private readonly IInventoryNotifier _notifier;
 
-        public InventoryService(AppDbContext db)
+        public InventoryService(AppDbContext db, IInventoryNotifier notifier)
         {
             _db = db;
+            _notifier = notifier;
         }
         public async Task DeductInventoryAsync(Order order, Guid performedByUserId)
         {
@@ -38,6 +41,14 @@ namespace Application.Orders.Services
                     PerformedByUserId = performedByUserId,
                     CreatedAt = DateTime.UtcNow
                 });
+
+                await _notifier.MenuItemStockChanged(
+                    order.CampusId,
+                    oi.ItemId,
+                    oi.Item.InventoryQuantity
+                );
+
+                await _db.SaveChangesAsync();
             }
         }
     }

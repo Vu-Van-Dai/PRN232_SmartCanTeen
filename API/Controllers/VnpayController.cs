@@ -40,52 +40,87 @@ namespace API.Controllers
             var responseCode = Request.Query["vnp_ResponseCode"].ToString();
 
             if (responseCode != "00")
-                return Ok(); // failed
+                return Ok();
 
             var txn = await _db.VnpayTransactions
                 .FirstOrDefaultAsync(x => x.VnpTxnRef == txnRef);
 
             if (txn == null || txn.IsSuccess)
-                return Ok(); // idempotent
+                return Ok();
 
             using var dbTx = await _db.Database.BeginTransactionAsync();
 
             Order? order = null;
-            txn.IsSuccess = true;
+            Wallet? wallet = null;
 
-            if (txn.Purpose == PaymentPurpose.OfflineOrder)
+            try
             {
-                 order = await _db.Orders
-                    .Include(o => o.Items)
-                    .FirstOrDefaultAsync(o => o.Id == txn.OrderId);
-
-                if (order == null || order.Status != OrderStatus.Pending)
-                    return Ok();
-
-                order.Status = OrderStatus.Paid;
-
-                // cộng QR cho ca
-                var shift = await _db.Shifts.FindAsync(txn.ShiftId);
-                if (shift == null || shift.Status != ShiftStatus.Open)
+                // ========= OFFLINE ORDER =========
+                if (txn.Purpose == PaymentPurpose.OfflineOrder)
                 {
-                    return Ok(); // KHÔNG xử lý thêm
+                    order = await _db.Orders
+                        .Include(o => o.Items)
+                        .FirstOrDefaultAsync(o => o.Id == txn.OrderId);
+
+                    if (order == null || order.Status != OrderStatus.Pending)
+                        throw new Exception("Invalid order");
+
+                    var shift = await _db.Shifts.FindAsync(txn.ShiftId);
+                    if (shift == null || shift.Status != ShiftStatus.Open)
+                        throw new Exception("Invalid shift");
+
+                    order.Status = OrderStatus.Paid;
+                    shift.SystemQrTotal += txn.Amount;
+
+                    await _inventoryService.DeductInventoryAsync(
+                        order,
+                        order.OrderedByUserId
+                    );
                 }
 
-                shift.SystemQrTotal += txn.Amount;
+                // ========= WALLET TOPUP =========
+                if (txn.Purpose == PaymentPurpose.WalletTopup)
+                {
+                    wallet = await _db.Wallets
+                        .FirstOrDefaultAsync(x => x.Id == txn.WalletId);
 
-                // TRỪ KHO + INVENTORY LOG
-                await _inventoryService.DeductInventoryAsync(
-                    order,
-                    order.OrderedByUserId
-                );
+                    if (wallet == null)
+                        throw new Exception("Wallet not found");
+
+                    wallet.Balance += txn.Amount;
+
+                    _db.Transactions.Add(new Transaction
+                    {
+                        Id = Guid.NewGuid(),
+                        CampusId = wallet.CampusId,
+                        WalletId = wallet.Id,
+                        Amount = txn.Amount,
+                        Type = TransactionType.Credit,
+                        Status = TransactionStatus.Success,
+                        PaymentMethod = PaymentMethod.Qr,
+                        PerformedByUserId = wallet.UserId,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                // ========= FINAL =========
+                txn.IsSuccess = true;
+
+                await _db.SaveChangesAsync();
+                await dbTx.CommitAsync();
+            }
+            catch
+            {
+                await dbTx.RollbackAsync();
+                return Ok();
             }
 
-            await _db.SaveChangesAsync();
-            await dbTx.CommitAsync();
-            if (txn.Purpose == PaymentPurpose.OfflineOrder && txn.ShiftId != null)
+            // ========= REALTIME (SAU COMMIT) =========
+
+            if (txn.Purpose == PaymentPurpose.OfflineOrder && order != null)
             {
                 await _managementHub.Clients
-                    .Group($"campus-{order!.CampusId}")
+                    .Group($"campus-{order.CampusId}")
                     .SendAsync("OrderPaid", new
                     {
                         orderId = order.Id,
@@ -93,20 +128,29 @@ namespace API.Controllers
                         amount = txn.Amount,
                         method = PaymentMethod.Qr
                     });
-            }
-            // SIGNALR → POS
-            if (txn.Purpose == PaymentPurpose.OfflineOrder && txn.ShiftId != null)
-            {
+
                 await _hub.Clients
-                    .Group(txn.ShiftId.ToString()!)
+                    .Group(order.ShiftId.ToString())
                     .SendAsync("OrderPaid", new
                     {
-                        orderId = txn.OrderId,
+                        orderId = order.Id,
+                        amount = txn.Amount
+                    });
+            }
+
+            if (txn.Purpose == PaymentPurpose.WalletTopup && wallet != null)
+            {
+                await _managementHub.Clients
+                    .Group($"campus-{wallet.CampusId}")
+                    .SendAsync("WalletTopup", new
+                    {
+                        walletId = wallet.Id,
                         amount = txn.Amount
                     });
             }
 
             return Ok();
         }
+
     }
 }
