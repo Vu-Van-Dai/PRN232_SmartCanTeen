@@ -10,7 +10,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/kitchen")]
-    [Authorize(Roles = "Kitchen,Manager")]
+    [Authorize(Roles = "Staff,StaffKitchen,Manager")]
     public class KitchenController : ControllerBase
     {
         private readonly AppDbContext _db;

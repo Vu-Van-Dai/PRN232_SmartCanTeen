@@ -13,7 +13,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/shifts")]
-    [Authorize(Roles = "Staff")]
+    [Authorize(Roles = "Staff,StaffPOS,Manager")]
     public class ShiftsController : ControllerBase
     {
         private readonly AppDbContext _db;

@@ -14,7 +14,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/pos/orders")]
-    [Authorize(Roles = "Staff")]
+    [Authorize(Roles = "Staff,StaffPOS,Manager")]
     public class PosOrderController : ControllerBase
     {
         private readonly AppDbContext _db;
