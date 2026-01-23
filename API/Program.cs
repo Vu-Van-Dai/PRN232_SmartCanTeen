@@ -1,6 +1,6 @@
 using API.Hubs;
 using Application.JWTToken;
-using Application.Orders.Services;
+using Application.Orders;
 using Application.Payments;
 using Core.Common;
 using Infrastructure.Persistence;

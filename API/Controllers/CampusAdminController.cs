@@ -9,7 +9,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/campus-admin")]
-    [Authorize(Roles = "SystemAdmin")]
+    [Authorize(Roles = "AdminSystem")]
     public class CampusAdminController : ControllerBase
     {
         private readonly AppDbContext _db;

@@ -11,7 +11,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Application.Orders.Services
+namespace Application.Orders
 {
 public class OrderSchedulerService
     {

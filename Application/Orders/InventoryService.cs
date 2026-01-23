@@ -4,7 +4,7 @@ using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace Application.Orders.Services
+namespace Application.Orders
 {
     public class InventoryService
     {
