@@ -1,5 +1,7 @@
 ﻿using Application.DTOs;
+using Application.DTOs.Users;
 using Application.JWTToken;
+using Core.Entities;
 using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
@@ -13,11 +15,13 @@ namespace API.Controllers
     {
         private readonly AppDbContext _db;
         private readonly JwtTokenService _jwt;
+        private readonly ICurrentCampusService _campus;
 
-        public AuthController(AppDbContext db, JwtTokenService jwt)
+        public AuthController(AppDbContext db, JwtTokenService jwt, ICurrentCampusService campus)
         {
             _db = db;
             _jwt = jwt;
+            _campus = campus;
         }
 
         [HttpPost("login")]
@@ -28,8 +32,12 @@ namespace API.Controllers
                 .ThenInclude(x => x.Role)
                 .FirstOrDefaultAsync(x => x.Email == request.Email);
 
+            if (!user.IsActive)
+                return Unauthorized("Account is locked");
+
             if (user == null || !PasswordHasher.Verify(request.Password, user.PasswordHash))
                 return Unauthorized("Invalid credentials");
+
 
             // Campus mặc định của user (admin seed)
             var campusId = await _db.Wallets
