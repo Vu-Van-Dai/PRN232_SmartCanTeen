@@ -10,9 +10,6 @@ namespace Core.Entities
 {
     public class Shift : BaseEntity
     {
-        public Guid CampusId { get; set; }
-        public Campus Campus { get; set; } = default!;
-
         public Guid UserId { get; set; }           // Staff
         public User User { get; set; } = default!;
 

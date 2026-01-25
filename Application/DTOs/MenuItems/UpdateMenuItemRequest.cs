@@ -13,7 +13,5 @@ namespace Application.DTOs.MenuItems
         public int InventoryQuantity { get; set; }
         public string? ImageUrl { get; set; }
         public bool IsActive { get; set; }
-
-        public uint xmin { get; set; }   // concurrency token
     }
 }

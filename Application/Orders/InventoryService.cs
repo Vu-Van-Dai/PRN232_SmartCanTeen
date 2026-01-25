@@ -4,7 +4,7 @@ using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
-namespace Application.Orders.Services
+namespace Application.Orders
 {
     public class InventoryService
     {
@@ -33,7 +33,6 @@ namespace Application.Orders.Services
                 _db.InventoryLogs.Add(new InventoryLog
                 {
                     Id = Guid.NewGuid(),
-                    CampusId = order.CampusId,
                     ItemId = oi.ItemId,
                     ChangeQuantity = -oi.Quantity,
                     Reason = InventoryLogReason.Sale,
@@ -43,7 +42,6 @@ namespace Application.Orders.Services
                 });
 
                 await _notifier.MenuItemStockChanged(
-                    order.CampusId,
                     oi.ItemId,
                     oi.Item.InventoryQuantity
                 );

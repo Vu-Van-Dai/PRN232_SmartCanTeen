@@ -19,12 +19,11 @@ namespace Application.JWTToken
             _config = config;
         }
 
-        public string GenerateToken(Guid userId, Guid campusId, IEnumerable<string> roles)
+        public string GenerateToken(Guid userId, IEnumerable<string> roles)
         {
             var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Sub, userId.ToString()),
-            new("campus_id", campusId.ToString())
+            new(JwtRegisteredClaimNames.Sub, userId.ToString())
         };
 
             claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));

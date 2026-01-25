@@ -10,9 +10,6 @@ namespace Core.Entities
 {
     public class MenuItem : BaseEntity, ISoftDelete
     {
-        public Guid CampusId { get; set; }
-        public Campus Campus { get; set; } = default!;
-
         public Guid CategoryId { get; set; }
         public Category Category { get; set; } = default!;
 
@@ -24,9 +21,5 @@ namespace Core.Entities
 
         public bool IsActive { get; set; } = true;
         public bool IsDeleted { get; set; } = false;
-
-        // Kiểm soát truy cập đồng thời lạc quan trong PostgreSQL
-        [ConcurrencyCheck]
-        public uint xmin { get; set; }
     }
 }

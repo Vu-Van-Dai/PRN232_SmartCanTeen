@@ -17,12 +17,10 @@ namespace API.Controllers
     public class ShiftsController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
         private readonly IHubContext<ManagementHub> _managementHub;
-        public ShiftsController(AppDbContext db, ICurrentCampusService campus, IHubContext<ManagementHub> managementHub)
+        public ShiftsController(AppDbContext db, IHubContext<ManagementHub> managementHub)
         {
             _db = db;
-            _campus = campus;
             _managementHub = managementHub;
         }
 
@@ -36,7 +34,6 @@ namespace API.Controllers
 
             var exists = await _db.Shifts.AnyAsync(x =>
                 x.UserId == userId &&
-                x.CampusId == _campus.CampusId &&
                 x.Status != ShiftStatus.Closed);
 
             if (exists)
@@ -46,7 +43,6 @@ namespace API.Controllers
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
-                CampusId = _campus.CampusId,
                 OpenedAt = DateTime.UtcNow,
                 Status = ShiftStatus.Open
             };
@@ -54,7 +50,7 @@ namespace API.Controllers
             _db.Shifts.Add(shift);
             await _db.SaveChangesAsync();
             await _managementHub.Clients
-                .Group($"campus-{_campus.CampusId}")
+                .All
                 .SendAsync("ShiftOpened", new
                 {
                     shiftId = shift.Id,
@@ -62,6 +58,29 @@ namespace API.Controllers
                     openedAt = shift.OpenedAt
                 });
             return Ok(shift.Id);
+        }
+
+        // =========================
+        // CURRENT SHIFT (for POS declare UI)
+        // =========================
+        [HttpGet("current")]
+        public async Task<IActionResult> GetCurrent()
+        {
+            var shift = await GetCurrentShiftOrNull();
+            if (shift == null)
+                return BadRequest("No active shift");
+
+            return Ok(new
+            {
+                id = shift.Id,
+                status = shift.Status.ToString(),
+                openedAt = shift.OpenedAt,
+                systemCashTotal = shift.SystemCashTotal,
+                systemQrTotal = shift.SystemQrTotal,
+                systemOnlineTotal = shift.SystemOnlineTotal,
+                staffCashInput = shift.StaffCashInput,
+                staffQrInput = shift.StaffQrInput
+            });
         }
 
         // =========================
@@ -135,7 +154,7 @@ namespace API.Controllers
 
             await _db.SaveChangesAsync();
             await _managementHub.Clients
-                .Group($"campus-{shift.CampusId}")
+                .All
                 .SendAsync("ShiftClosed", new
                 {
                     shiftId = shift.Id,
@@ -157,7 +176,6 @@ namespace API.Controllers
 
             return await _db.Shifts.FirstOrDefaultAsync(x =>
                 x.UserId == userId &&
-                x.CampusId == _campus.CampusId &&
                 x.Status != ShiftStatus.Closed);
         }
         // Không cho mở ca mới nếu còn ca đang Open / Declaring / Counting / WaitingConfirm

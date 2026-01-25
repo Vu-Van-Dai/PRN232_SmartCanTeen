@@ -13,9 +13,6 @@ namespace Core.Entities
         public Guid UserId { get; set; }
         public User User { get; set; } = default!;
 
-        public Guid CampusId { get; set; }
-        public Campus Campus { get; set; } = default!;
-
         public decimal Balance { get; set; }
         public WalletStatus Status { get; set; } = WalletStatus.Active;
 

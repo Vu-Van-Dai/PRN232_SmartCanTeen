@@ -15,14 +15,10 @@ namespace API.Controllers
     public class OnlineOrdersController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
 
-        public OnlineOrdersController(
-            AppDbContext db,
-            ICurrentCampusService campus)
+        public OnlineOrdersController(AppDbContext db)
         {
             _db = db;
-            _campus = campus;
         }
 
         [HttpPost]
@@ -38,7 +34,6 @@ namespace API.Controllers
             // 🔒 CHẶN NẾU NGÀY ĐÃ CHỐT
             var today = DateTime.UtcNow.Date;
             var dayLocked = await _db.DailyRevenues.AnyAsync(x =>
-                x.CampusId == _campus.CampusId &&
                 x.Date == today
             );
             if (dayLocked)
@@ -49,7 +44,6 @@ namespace API.Controllers
             var menuItems = await _db.MenuItems
                 .Where(x =>
                     itemIds.Contains(x.Id) &&
-                    x.CampusId == _campus.CampusId &&
                     x.IsActive &&
                     !x.IsDeleted)
                 .ToDictionaryAsync(x => x.Id);
@@ -59,7 +53,6 @@ namespace API.Controllers
             var order = new Order
             {
                 Id = Guid.NewGuid(),
-                CampusId = _campus.CampusId,
                 OrderedByUserId = userId,
 
                 OrderSource = OrderSource.Online,

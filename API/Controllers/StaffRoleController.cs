@@ -12,14 +12,10 @@ namespace API.Controllers
     public class StaffRoleController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
 
-        public StaffRoleController(
-            AppDbContext db,
-            ICurrentCampusService campus)
+        public StaffRoleController(AppDbContext db)
         {
             _db = db;
-            _campus = campus;
         }
 
         // =========================
@@ -35,9 +31,7 @@ namespace API.Controllers
 
             var user = await _db.Users
                 .Include(x => x.UserRoles)
-                .FirstOrDefaultAsync(x =>
-                    x.Id == userId &&
-                    x.CampusId == _campus.CampusId);
+                .FirstOrDefaultAsync(x => x.Id == userId);
 
             if (user == null)
                 return NotFound();
@@ -91,8 +85,7 @@ namespace API.Controllers
                 .Include(x => x.User)
                 .FirstOrDefaultAsync(x =>
                     x.UserId == userId &&
-                    x.RoleId == role.Id &&
-                    x.User.CampusId == _campus.CampusId);
+                    x.RoleId == role.Id);
 
             if (userRole == null)
                 return NotFound();

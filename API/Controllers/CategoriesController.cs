@@ -9,18 +9,14 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/categories")]
-    [Authorize(Roles = "Manager")]
+    [Authorize]
     public class CategoriesController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
 
-        public CategoriesController(
-            AppDbContext db,
-            ICurrentCampusService campus)
+        public CategoriesController(AppDbContext db)
         {
             _db = db;
-            _campus = campus;
         }
 
         // =========================
@@ -30,9 +26,7 @@ namespace API.Controllers
         public async Task<IActionResult> GetAll()
         {
             var categories = await _db.Categories
-                .Where(x =>
-                    x.CampusId == _campus.CampusId &&
-                    !x.IsDeleted)
+                .Where(x => !x.IsDeleted)
                 .OrderBy(x => x.Name)
                 .Select(x => new CategoryResponse
                 {
@@ -54,7 +48,6 @@ namespace API.Controllers
             var category = await _db.Categories
                 .Where(x =>
                     x.Id == id &&
-                    x.CampusId == _campus.CampusId &&
                     !x.IsDeleted)
                 .Select(x => new CategoryResponse
                 {
@@ -74,10 +67,10 @@ namespace API.Controllers
         // POST: CREATE
         // =========================
         [HttpPost]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Create(CreateCategoryRequest request)
         {
             var exists = await _db.Categories.AnyAsync(x =>
-                x.CampusId == _campus.CampusId &&
                 !x.IsDeleted &&
                 x.Name == request.Name);
 
@@ -87,7 +80,6 @@ namespace API.Controllers
             var category = new Category
             {
                 Id = Guid.NewGuid(),
-                CampusId = _campus.CampusId,
                 Name = request.Name,
                 IsActive = true,
                 IsDeleted = false,
@@ -104,13 +96,13 @@ namespace API.Controllers
         // PUT: UPDATE
         // =========================
         [HttpPut("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Update(
             Guid id,
             UpdateCategoryRequest request)
         {
             var category = await _db.Categories.FirstOrDefaultAsync(x =>
                 x.Id == id &&
-                x.CampusId == _campus.CampusId &&
                 !x.IsDeleted);
 
             if (category == null)
@@ -118,7 +110,6 @@ namespace API.Controllers
 
             var duplicate = await _db.Categories.AnyAsync(x =>
                 x.Id != id &&
-                x.CampusId == _campus.CampusId &&
                 !x.IsDeleted &&
                 x.Name == request.Name);
 
@@ -136,11 +127,11 @@ namespace API.Controllers
         // DELETE: SOFT DELETE
         // =========================
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var category = await _db.Categories.FirstOrDefaultAsync(x =>
                 x.Id == id &&
-                x.CampusId == _campus.CampusId &&
                 !x.IsDeleted);
 
             if (category == null)

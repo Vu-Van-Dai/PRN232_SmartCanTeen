@@ -9,7 +9,6 @@ namespace Core.Common
     public interface IInventoryNotifier
     {
         Task MenuItemStockChanged(
-            Guid campusId,
             Guid itemId,
             int inventoryQuantity
         );

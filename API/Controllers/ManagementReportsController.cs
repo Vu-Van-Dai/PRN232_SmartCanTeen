@@ -14,14 +14,10 @@ namespace API.Controllers
     public class ManagementReportsController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
 
-        public ManagementReportsController(
-            AppDbContext db,
-            ICurrentCampusService campus)
+        public ManagementReportsController(AppDbContext db)
         {
             _db = db;
-            _campus = campus;
         }
 
         /// <summary>
@@ -36,7 +32,6 @@ namespace API.Controllers
 
             var shifts = await _db.Shifts
                 .Where(x =>
-                    x.CampusId == _campus.CampusId &&
                     x.Status == ShiftStatus.Closed &&
                     x.ClosedAt >= from &&
                     x.ClosedAt < to)
@@ -84,7 +79,6 @@ namespace API.Controllers
 
             var shifts = await _db.Shifts
                 .Where(x =>
-                    x.CampusId == _campus.CampusId &&
                     x.Status == ShiftStatus.Closed &&
                     x.ClosedAt >= from &&
                     x.ClosedAt < to)
@@ -93,9 +87,7 @@ namespace API.Controllers
             if (!shifts.Any())
                 return BadRequest("No closed shifts");
 
-            var exists = await _db.DailyRevenues.AnyAsync(x =>
-                x.CampusId == _campus.CampusId &&
-                x.Date == from);
+            var exists = await _db.DailyRevenues.AnyAsync(x => x.Date == from);
 
             if (exists)
                 return BadRequest("Day already closed");
@@ -107,7 +99,6 @@ namespace API.Controllers
             var daily = new DailyRevenue
             {
                 Id = Guid.NewGuid(),
-                CampusId = _campus.CampusId,
                 Date = from,
 
                 TotalCash = shifts.Sum(x => x.SystemCashTotal),
@@ -129,7 +120,6 @@ namespace API.Controllers
             var shift = await _db.Shifts
                 .Where(x =>
                     x.Id == shiftId &&
-                    x.CampusId == _campus.CampusId &&
                     x.Status == ShiftStatus.Closed)
                 .Select(x => new
                 {
@@ -158,7 +148,6 @@ namespace API.Controllers
 
             var shifts = await _db.Shifts
                 .Where(x =>
-                    x.CampusId == _campus.CampusId &&
                     x.OpenedAt >= today)
                 .Select(x => new
                 {

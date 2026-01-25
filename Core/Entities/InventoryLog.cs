@@ -10,9 +10,6 @@ namespace Core.Entities
 {
     public class InventoryLog : BaseEntity
     {
-        public Guid CampusId { get; set; }
-        public Campus Campus { get; set; } = default!;
-
         public Guid ItemId { get; set; }
         public MenuItem Item { get; set; } = default!;
 

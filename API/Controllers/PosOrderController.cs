@@ -18,18 +18,15 @@ namespace API.Controllers
     public class PosOrderController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
         private readonly VnpayService _vnpay;
         private readonly IHubContext<ManagementHub> _managementHub;
 
         public PosOrderController(
             AppDbContext db,
-            ICurrentCampusService campus,
             VnpayService vnpay,
             IHubContext<ManagementHub> managementHub)
         {
             _db = db;
-            _campus = campus;
             _vnpay = vnpay;
             _managementHub = managementHub;
         }
@@ -37,7 +34,6 @@ namespace API.Controllers
         public async Task<bool> IsDayLocked(DateTime date)
         {
             return await _db.DailyRevenues.AnyAsync(x =>
-                x.CampusId == _campus.CampusId &&
                 x.Date == date.Date
             );
         }
@@ -58,7 +54,6 @@ namespace API.Controllers
             var today = DateTime.UtcNow.Date;
 
             var dayLocked = await _db.DailyRevenues.AnyAsync(x =>
-                x.CampusId == _campus.CampusId &&
                 x.Date == today
             );
 
@@ -68,7 +63,6 @@ namespace API.Controllers
             // 1️⃣ LẤY CA ĐANG MỞ
             var shift = await _db.Shifts.FirstOrDefaultAsync(x =>
                 x.UserId == staffId &&
-                x.CampusId == _campus.CampusId &&
                 x.Status == ShiftStatus.Open
             );
 
@@ -79,7 +73,6 @@ namespace API.Controllers
             var order = new Order
             {
                 Id = Guid.NewGuid(),
-                CampusId = _campus.CampusId,
                 ShiftId = shift.Id,
                 OrderedByUserId = staffId,
 
@@ -104,7 +97,6 @@ namespace API.Controllers
             var menuItems = await _db.MenuItems
                 .Where(x =>
                     itemIds.Contains(x.Id) &&
-                    x.CampusId == _campus.CampusId &&
                     !x.IsDeleted &&
                     x.IsActive
                 )
@@ -142,7 +134,7 @@ namespace API.Controllers
 
             await _db.SaveChangesAsync();
             await _managementHub.Clients
-                .Group($"campus-{_campus.CampusId}")
+                .All
                 .SendAsync("OrderCreated", new
                 {
                     orderId = order.Id,

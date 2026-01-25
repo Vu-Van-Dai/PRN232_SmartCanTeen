@@ -4,30 +4,27 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
-
 namespace Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class m1 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "Campuses",
+                name: "Categories",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Code = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
                     Name = table.Column<string>(type: "text", nullable: false),
-                    Config = table.Column<string>(type: "text", nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Campuses", x => x.Id);
+                    table.PrimaryKey("PK_Categories", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -81,23 +78,50 @@ namespace Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Categories",
+                name: "MenuItems",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CampusId = table.Column<Guid>(type: "uuid", nullable: false),
+                    CategoryId = table.Column<Guid>(type: "uuid", nullable: false),
                     Name = table.Column<string>(type: "text", nullable: false),
+                    Price = table.Column<decimal>(type: "numeric", nullable: false),
+                    InventoryQuantity = table.Column<int>(type: "integer", nullable: false),
+                    ImageUrl = table.Column<string>(type: "text", nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
                     IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Categories", x => x.Id);
+                    table.PrimaryKey("PK_MenuItems", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Categories_Campuses_CampusId",
-                        column: x => x.CampusId,
-                        principalTable: "Campuses",
+                        name: "FK_MenuItems_Categories_CategoryId",
+                        column: x => x.CategoryId,
+                        principalTable: "Categories",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "DailyRevenues",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    Date = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    TotalCash = table.Column<decimal>(type: "numeric", nullable: false),
+                    TotalQr = table.Column<decimal>(type: "numeric", nullable: false),
+                    TotalOnline = table.Column<decimal>(type: "numeric", nullable: false),
+                    ClosedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ClosedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DailyRevenues", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DailyRevenues_Users_ClosedByUserId",
+                        column: x => x.ClosedByUserId,
+                        principalTable: "Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -107,7 +131,6 @@ namespace Infrastructure.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CampusId = table.Column<Guid>(type: "uuid", nullable: false),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
                     OpenedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     ClosedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -123,12 +146,6 @@ namespace Infrastructure.Migrations
                 {
                     table.PrimaryKey("PK_Shifts", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Shifts_Campuses_CampusId",
-                        column: x => x.CampusId,
-                        principalTable: "Campuses",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
                         name: "FK_Shifts_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
@@ -141,18 +158,11 @@ namespace Infrastructure.Migrations
                 columns: table => new
                 {
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CampusId = table.Column<Guid>(type: "uuid", nullable: false),
                     AssignedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_StaffAssignments", x => x.UserId);
-                    table.ForeignKey(
-                        name: "FK_StaffAssignments_Campuses_CampusId",
-                        column: x => x.CampusId,
-                        principalTable: "Campuses",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_StaffAssignments_Users_UserId",
                         column: x => x.UserId,
@@ -218,7 +228,6 @@ namespace Infrastructure.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     UserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CampusId = table.Column<Guid>(type: "uuid", nullable: false),
                     Balance = table.Column<decimal>(type: "numeric", nullable: false),
                     Status = table.Column<int>(type: "integer", nullable: false),
                     ClosedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -228,12 +237,6 @@ namespace Infrastructure.Migrations
                 {
                     table.PrimaryKey("PK_Wallets", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Wallets_Campuses_CampusId",
-                        column: x => x.CampusId,
-                        principalTable: "Campuses",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
                         name: "FK_Wallets_Users_UserId",
                         column: x => x.UserId,
                         principalTable: "Users",
@@ -242,34 +245,30 @@ namespace Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "MenuItems",
+                name: "InventoryLogs",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CampusId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CategoryId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "text", nullable: false),
-                    Price = table.Column<decimal>(type: "numeric", nullable: false),
-                    InventoryQuantity = table.Column<int>(type: "integer", nullable: false),
-                    ImageUrl = table.Column<string>(type: "text", nullable: true),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
-                    IsDeleted = table.Column<bool>(type: "boolean", nullable: false),
-                    xmin = table.Column<long>(type: "bigint", nullable: false),
+                    ItemId = table.Column<Guid>(type: "uuid", nullable: false),
+                    ChangeQuantity = table.Column<int>(type: "integer", nullable: false),
+                    Reason = table.Column<int>(type: "integer", nullable: false),
+                    ReferenceId = table.Column<Guid>(type: "uuid", nullable: true),
+                    PerformedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_MenuItems", x => x.Id);
+                    table.PrimaryKey("PK_InventoryLogs", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_MenuItems_Campuses_CampusId",
-                        column: x => x.CampusId,
-                        principalTable: "Campuses",
+                        name: "FK_InventoryLogs_MenuItems_ItemId",
+                        column: x => x.ItemId,
+                        principalTable: "MenuItems",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_MenuItems_Categories_CategoryId",
-                        column: x => x.CategoryId,
-                        principalTable: "Categories",
+                        name: "FK_InventoryLogs_Users_PerformedByUserId",
+                        column: x => x.PerformedByUserId,
+                        principalTable: "Users",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -279,7 +278,6 @@ namespace Infrastructure.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CampusId = table.Column<Guid>(type: "uuid", nullable: false),
                     WalletId = table.Column<Guid>(type: "uuid", nullable: true),
                     OrderedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
                     ShiftId = table.Column<Guid>(type: "uuid", nullable: true),
@@ -289,17 +287,13 @@ namespace Infrastructure.Migrations
                     SubTotal = table.Column<decimal>(type: "numeric", nullable: false),
                     DiscountAmount = table.Column<decimal>(type: "numeric", nullable: false),
                     TotalPrice = table.Column<decimal>(type: "numeric", nullable: false),
+                    PickupTime = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    IsUrgent = table.Column<bool>(type: "boolean", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Orders", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Orders_Campuses_CampusId",
-                        column: x => x.CampusId,
-                        principalTable: "Campuses",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_Orders_Shifts_ShiftId",
                         column: x => x.ShiftId,
@@ -347,42 +341,6 @@ namespace Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "InventoryLogs",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CampusId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ItemId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ChangeQuantity = table.Column<int>(type: "integer", nullable: false),
-                    Reason = table.Column<int>(type: "integer", nullable: false),
-                    ReferenceId = table.Column<Guid>(type: "uuid", nullable: true),
-                    PerformedByUserId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_InventoryLogs", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_InventoryLogs_Campuses_CampusId",
-                        column: x => x.CampusId,
-                        principalTable: "Campuses",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_InventoryLogs_MenuItems_ItemId",
-                        column: x => x.ItemId,
-                        principalTable: "MenuItems",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_InventoryLogs_Users_PerformedByUserId",
-                        column: x => x.PerformedByUserId,
-                        principalTable: "Users",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "OrderItems",
                 columns: table => new
                 {
@@ -415,7 +373,6 @@ namespace Infrastructure.Migrations
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CampusId = table.Column<Guid>(type: "uuid", nullable: false),
                     WalletId = table.Column<Guid>(type: "uuid", nullable: true),
                     OrderId = table.Column<Guid>(type: "uuid", nullable: true),
                     Amount = table.Column<decimal>(type: "numeric", nullable: false),
@@ -428,12 +385,6 @@ namespace Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Transactions", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Transactions_Campuses_CampusId",
-                        column: x => x.CampusId,
-                        principalTable: "Campuses",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
                         name: "FK_Transactions_Orders_OrderId",
                         column: x => x.OrderId,
@@ -454,53 +405,16 @@ namespace Infrastructure.Migrations
                         onDelete: ReferentialAction.SetNull);
                 });
 
-            migrationBuilder.InsertData(
-                table: "Campuses",
-                columns: new[] { "Id", "Code", "Config", "CreatedAt", "IsActive", "Name" },
-                values: new object[] { new Guid("11111111-1111-1111-1111-111111111111"), "FPTU_DN", null, new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), true, "FPT University Da Nang" });
-
-            migrationBuilder.InsertData(
-                table: "Roles",
-                columns: new[] { "Id", "Name" },
-                values: new object[,]
-                {
-                    { 1, "Admin" },
-                    { 2, "Manager" },
-                    { 3, "Staff" },
-                    { 4, "Student" },
-                    { 5, "Parent" }
-                });
-
-            migrationBuilder.InsertData(
-                table: "Users",
-                columns: new[] { "Id", "CreatedAt", "Email", "FullName", "IsActive", "IsDeleted", "PasswordHash" },
-                values: new object[] { new Guid("22222222-2222-2222-2222-222222222222"), new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "admin@canteen.com", "System Admin", true, false, "HASHED_PASSWORD" });
-
-            migrationBuilder.InsertData(
-                table: "UserRoles",
-                columns: new[] { "RoleId", "UserId" },
-                values: new object[] { 1, new Guid("22222222-2222-2222-2222-222222222222") });
-
-            migrationBuilder.InsertData(
-                table: "Wallets",
-                columns: new[] { "Id", "Balance", "CampusId", "ClosedAt", "CreatedAt", "Status", "UserId" },
-                values: new object[] { new Guid("33333333-3333-3333-3333-333333333333"), 0m, new Guid("11111111-1111-1111-1111-111111111111"), null, new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), 0, new Guid("22222222-2222-2222-2222-222222222222") });
+            migrationBuilder.CreateIndex(
+                name: "IX_DailyRevenues_ClosedByUserId",
+                table: "DailyRevenues",
+                column: "ClosedByUserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Campuses_Code",
-                table: "Campuses",
-                column: "Code",
+                name: "IX_DailyRevenues_Date",
+                table: "DailyRevenues",
+                column: "Date",
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Categories_CampusId",
-                table: "Categories",
-                column: "CampusId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_InventoryLogs_CampusId",
-                table: "InventoryLogs",
-                column: "CampusId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_InventoryLogs_ItemId",
@@ -511,11 +425,6 @@ namespace Infrastructure.Migrations
                 name: "IX_InventoryLogs_PerformedByUserId",
                 table: "InventoryLogs",
                 column: "PerformedByUserId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_MenuItems_CampusId",
-                table: "MenuItems",
-                column: "CampusId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_MenuItems_CategoryId",
@@ -533,11 +442,6 @@ namespace Infrastructure.Migrations
                 column: "OrderId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Orders_CampusId",
-                table: "Orders",
-                column: "CampusId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Orders_OrderedByUserId",
                 table: "Orders",
                 column: "OrderedByUserId");
@@ -553,24 +457,9 @@ namespace Infrastructure.Migrations
                 column: "WalletId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Shifts_CampusId",
-                table: "Shifts",
-                column: "CampusId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Shifts_UserId",
                 table: "Shifts",
                 column: "UserId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_StaffAssignments_CampusId",
-                table: "StaffAssignments",
-                column: "CampusId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Transactions_CampusId",
-                table: "Transactions",
-                column: "CampusId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Transactions_OrderId",
@@ -610,14 +499,9 @@ namespace Infrastructure.Migrations
                 column: "UserId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Wallets_CampusId",
+                name: "IX_Wallets_UserId",
                 table: "Wallets",
-                column: "CampusId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Wallets_UserId_CampusId",
-                table: "Wallets",
-                columns: new[] { "UserId", "CampusId" },
+                column: "UserId",
                 unique: true,
                 filter: "\"Status\" = 0");
         }
@@ -625,6 +509,9 @@ namespace Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "DailyRevenues");
+
             migrationBuilder.DropTable(
                 name: "InventoryLogs");
 
@@ -666,9 +553,6 @@ namespace Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "Wallets");
-
-            migrationBuilder.DropTable(
-                name: "Campuses");
 
             migrationBuilder.DropTable(
                 name: "Users");

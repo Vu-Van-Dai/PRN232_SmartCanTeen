@@ -1,14 +1,37 @@
 using API.Hubs;
 using Application.JWTToken;
-using Application.Orders.Services;
+using Application.Orders;
 using Application.Payments;
 using Core.Common;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using API.Seed;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// CORS (needed for FE dev server calling BE)
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("DevCors", policy =>
+    {
+        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+            ?? new[]
+            {
+                "http://localhost:8080",
+                "http://localhost:5173",
+                "https://localhost:8080",
+                "https://localhost:5173"
+            };
+
+        policy
+            .WithOrigins(origins)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
 
 // Add services to the container.
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -25,7 +48,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 //    };
 //});
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddScoped<ICurrentCampusService, CurrentCampusService>();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<VnpayService>();
 builder.Services.AddScoped<InventoryService>();
@@ -66,6 +88,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// CORS must run before auth/authorization to allow preflight (OPTIONS) requests.
+app.UseCors("DevCors");
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -74,5 +99,7 @@ app.MapHub<ManagementHub>("/hubs/management");
 app.MapHub<KitchenHub>("/hubs/kitchen");
 
 app.MapControllers();
+
+await DbSeeder.SeedAsync(app.Services, app.Configuration);
 
 app.Run();

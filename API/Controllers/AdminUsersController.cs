@@ -1,6 +1,7 @@
 ﻿using Application.DTOs.Users;
 using Application.DTOs;
 using Core.Entities;
+using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,16 +12,14 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/admin/users")]
-    [Authorize(Roles = "AdminCampus")]
+    [Authorize(Roles = "AdminSystem")]
     public class AdminUsersController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
 
-        public AdminUsersController(AppDbContext db, ICurrentCampusService campus)
+        public AdminUsersController(AppDbContext db)
         {
             _db = db;
-            _campus = campus;
         }
 
         // ===============================
@@ -50,7 +49,6 @@ namespace API.Controllers
                 Email = request.Email,
                 FullName = request.FullName,
                 PasswordHash = PasswordHasher.Hash(request.Password),
-                CampusId = _campus.CampusId, // ⭐ AUTO GÁN
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
@@ -63,6 +61,19 @@ namespace API.Controllers
                 UserId = user.Id,
                 RoleId = role.Id
             });
+
+            // 5️⃣ Nếu là Student thì tự tạo Wallet (balance = 0)
+            if (string.Equals(role.Name, "Student", StringComparison.OrdinalIgnoreCase))
+            {
+                _db.Wallets.Add(new Wallet
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = user.Id,
+                    Balance = 0m,
+                    Status = WalletStatus.Active,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
 
             await _db.SaveChangesAsync();
 
@@ -82,7 +93,6 @@ namespace API.Controllers
         [FromQuery] string? role)
         {
             var query = _db.Users
-                .Where(x => x.CampusId == _campus.CampusId)
                 .AsQueryable();
 
             if (!string.IsNullOrEmpty(role))

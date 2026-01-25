@@ -1,4 +1,4 @@
-﻿using Application.Orders.Services;
+﻿using Application.Orders;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -47,13 +47,11 @@ namespace API.Hubs
 
             foreach (var order in orders)
             {
-                await _hub.Clients
-                    .Group($"campus-{order.CampusId}")
-                    .SendAsync("NewKitchenOrder", new
-                    {
-                        orderId = order.Id,
-                        pickupTime = order.PickupTime
-                    });
+                await _hub.Clients.All.SendAsync("NewKitchenOrder", new
+                {
+                    orderId = order.Id,
+                    pickupTime = order.PickupTime
+                });
             }
         }
     }
