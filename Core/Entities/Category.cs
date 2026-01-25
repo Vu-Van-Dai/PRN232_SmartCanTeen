@@ -9,9 +9,6 @@ namespace Core.Entities
 {
     public class Category : BaseEntity, ISoftDelete
     {
-        public Guid CampusId { get; set; }
-        public Campus Campus { get; set; } = default!;
-
         public string Name { get; set; } = default!;
 
         public bool IsActive { get; set; } = true;

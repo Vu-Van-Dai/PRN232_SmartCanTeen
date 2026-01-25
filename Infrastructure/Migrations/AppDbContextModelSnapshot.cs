@@ -22,55 +22,10 @@ namespace Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Core.Entities.Campus", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("Config")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Code")
-                        .IsUnique();
-
-                    b.ToTable("Campuses");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("11111111-1111-1111-1111-111111111111"),
-                            Code = "FPTU_DN",
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            IsActive = true,
-                            Name = "FPT University Da Nang"
-                        });
-                });
-
             modelBuilder.Entity("Core.Entities.Category", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CampusId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
@@ -88,8 +43,6 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CampusId");
-
                     b.ToTable("Categories");
                 });
 
@@ -97,9 +50,6 @@ namespace Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CampusId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("ClosedAt")
@@ -127,7 +77,7 @@ namespace Infrastructure.Migrations
 
                     b.HasIndex("ClosedByUserId");
 
-                    b.HasIndex("CampusId", "Date")
+                    b.HasIndex("Date")
                         .IsUnique();
 
                     b.ToTable("DailyRevenues");
@@ -137,9 +87,6 @@ namespace Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CampusId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("ChangeQuantity")
@@ -162,8 +109,6 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CampusId");
-
                     b.HasIndex("ItemId");
 
                     b.HasIndex("PerformedByUserId");
@@ -175,9 +120,6 @@ namespace Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CampusId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("CategoryId")
@@ -205,13 +147,7 @@ namespace Infrastructure.Migrations
                     b.Property<decimal>("Price")
                         .HasColumnType("numeric");
 
-                    b.Property<long>("xmin")
-                        .IsConcurrencyToken()
-                        .HasColumnType("bigint");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("CampusId");
 
                     b.HasIndex("CategoryId");
 
@@ -222,9 +158,6 @@ namespace Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CampusId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
@@ -264,8 +197,6 @@ namespace Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CampusId");
 
                     b.HasIndex("OrderedByUserId");
 
@@ -321,47 +252,12 @@ namespace Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Roles");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            Name = "Admin"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            Name = "Manager"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            Name = "Staff"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            Name = "Student"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            Name = "Parent"
-                        },
-                        new
-                        {
-                            Id = 6,
-                            Name = "Kitchen"
-                        });
                 });
 
             modelBuilder.Entity("Core.Entities.Shift", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CampusId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime?>("ClosedAt")
@@ -401,8 +297,6 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CampusId");
-
                     b.HasIndex("UserId");
 
                     b.ToTable("Shifts");
@@ -416,12 +310,7 @@ namespace Infrastructure.Migrations
                     b.Property<DateTime>("AssignedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid>("CampusId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("UserId");
-
-                    b.HasIndex("CampusId");
 
                     b.ToTable("StaffAssignments");
                 });
@@ -434,9 +323,6 @@ namespace Infrastructure.Migrations
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("numeric");
-
-                    b.Property<Guid>("CampusId")
-                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -460,8 +346,6 @@ namespace Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CampusId");
 
                     b.HasIndex("OrderId");
 
@@ -506,18 +390,6 @@ namespace Infrastructure.Migrations
                         .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("Users");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Email = "admin@canteen.com",
-                            FullName = "System Admin",
-                            IsActive = true,
-                            IsDeleted = false,
-                            PasswordHash = "HASHED_PASSWORD"
-                        });
                 });
 
             modelBuilder.Entity("Core.Entities.UserRelation", b =>
@@ -557,13 +429,6 @@ namespace Infrastructure.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("UserRoles");
-
-                    b.HasData(
-                        new
-                        {
-                            UserId = new Guid("22222222-2222-2222-2222-222222222222"),
-                            RoleId = 1
-                        });
                 });
 
             modelBuilder.Entity("Core.Entities.VnpayTransaction", b =>
@@ -614,9 +479,6 @@ namespace Infrastructure.Migrations
                     b.Property<decimal>("Balance")
                         .HasColumnType("numeric");
 
-                    b.Property<Guid>("CampusId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTime?>("ClosedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -631,24 +493,11 @@ namespace Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CampusId");
-
-                    b.HasIndex("UserId", "CampusId")
+                    b.HasIndex("UserId")
                         .IsUnique()
                         .HasFilter("\"Status\" = 0");
 
                     b.ToTable("Wallets");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
-                            Balance = 0m,
-                            CampusId = new Guid("11111111-1111-1111-1111-111111111111"),
-                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Status = 0,
-                            UserId = new Guid("22222222-2222-2222-2222-222222222222")
-                        });
                 });
 
             modelBuilder.Entity("Core.Entities.WalletAccess", b =>
@@ -672,44 +521,19 @@ namespace Infrastructure.Migrations
                     b.ToTable("WalletAccesses");
                 });
 
-            modelBuilder.Entity("Core.Entities.Category", b =>
-                {
-                    b.HasOne("Core.Entities.Campus", "Campus")
-                        .WithMany()
-                        .HasForeignKey("CampusId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Campus");
-                });
-
             modelBuilder.Entity("Core.Entities.DailyRevenue", b =>
                 {
-                    b.HasOne("Core.Entities.Campus", "Campus")
-                        .WithMany()
-                        .HasForeignKey("CampusId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Core.Entities.User", "ClosedByUser")
                         .WithMany()
                         .HasForeignKey("ClosedByUserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Campus");
-
                     b.Navigation("ClosedByUser");
                 });
 
             modelBuilder.Entity("Core.Entities.InventoryLog", b =>
                 {
-                    b.HasOne("Core.Entities.Campus", "Campus")
-                        .WithMany()
-                        .HasForeignKey("CampusId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Core.Entities.MenuItem", "Item")
                         .WithMany()
                         .HasForeignKey("ItemId")
@@ -722,8 +546,6 @@ namespace Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Campus");
-
                     b.Navigation("Item");
 
                     b.Navigation("PerformedByUser");
@@ -731,31 +553,17 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Core.Entities.MenuItem", b =>
                 {
-                    b.HasOne("Core.Entities.Campus", "Campus")
-                        .WithMany()
-                        .HasForeignKey("CampusId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Core.Entities.Category", "Category")
                         .WithMany()
                         .HasForeignKey("CategoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Campus");
-
                     b.Navigation("Category");
                 });
 
             modelBuilder.Entity("Core.Entities.Order", b =>
                 {
-                    b.HasOne("Core.Entities.Campus", "Campus")
-                        .WithMany()
-                        .HasForeignKey("CampusId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Core.Entities.User", "OrderedByUser")
                         .WithMany()
                         .HasForeignKey("OrderedByUserId")
@@ -771,8 +579,6 @@ namespace Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("WalletId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Campus");
 
                     b.Navigation("OrderedByUser");
 
@@ -802,50 +608,28 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Core.Entities.Shift", b =>
                 {
-                    b.HasOne("Core.Entities.Campus", "Campus")
-                        .WithMany()
-                        .HasForeignKey("CampusId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Core.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Campus");
-
                     b.Navigation("User");
                 });
 
             modelBuilder.Entity("Core.Entities.StaffAssignment", b =>
                 {
-                    b.HasOne("Core.Entities.Campus", "Campus")
-                        .WithMany()
-                        .HasForeignKey("CampusId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Core.Entities.User", "User")
                         .WithOne()
                         .HasForeignKey("Core.Entities.StaffAssignment", "UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Campus");
-
                     b.Navigation("User");
                 });
 
             modelBuilder.Entity("Core.Entities.Transaction", b =>
                 {
-                    b.HasOne("Core.Entities.Campus", "Campus")
-                        .WithMany()
-                        .HasForeignKey("CampusId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Core.Entities.Order", "Order")
                         .WithMany()
                         .HasForeignKey("OrderId")
@@ -861,8 +645,6 @@ namespace Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("WalletId")
                         .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("Campus");
 
                     b.Navigation("Order");
 
@@ -911,19 +693,11 @@ namespace Infrastructure.Migrations
 
             modelBuilder.Entity("Core.Entities.Wallet", b =>
                 {
-                    b.HasOne("Core.Entities.Campus", "Campus")
-                        .WithMany()
-                        .HasForeignKey("CampusId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("Core.Entities.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Campus");
 
                     b.Navigation("User");
                 });

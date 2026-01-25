@@ -9,9 +9,6 @@ namespace Core.Entities
 {
     public class DailyRevenue : BaseEntity
     {
-        public Guid CampusId { get; set; }
-        public Campus Campus { get; set; } = default!;
-
         public DateTime Date { get; set; }   // yyyy-MM-dd
 
         // ===== SYSTEM TOTAL =====

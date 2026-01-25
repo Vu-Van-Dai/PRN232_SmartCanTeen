@@ -11,17 +11,15 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/menu-items")]
-    [Authorize(Roles = "Manager")]
+    [Authorize]
     public class MenuItemsController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
         private readonly IHubContext<ManagementHub> _hub;
 
-        public MenuItemsController(AppDbContext db, ICurrentCampusService campus, IHubContext<ManagementHub> hub)
+        public MenuItemsController(AppDbContext db, IHubContext<ManagementHub> hub)
         {
             _db = db;
-            _campus = campus;
             _hub = hub;
         }
 
@@ -34,7 +32,6 @@ namespace API.Controllers
             var items = await _db.MenuItems
                 .Include(x => x.Category)
                 .Where(x =>
-                    x.CampusId == _campus.CampusId &&
                     !x.IsDeleted
                 )
                 .Select(x => new MenuItemResponse
@@ -46,8 +43,7 @@ namespace API.Controllers
                     Price = x.Price,
                     InventoryQuantity = x.InventoryQuantity,
                     ImageUrl = x.ImageUrl,
-                    IsActive = x.IsActive,
-                    xmin = x.xmin
+                    IsActive = x.IsActive
                 })
                 .ToListAsync();
 
@@ -58,6 +54,7 @@ namespace API.Controllers
         // CREATE
         // =========================
         [HttpPost]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Create(CreateMenuItemRequest request)
         {
             if (string.IsNullOrWhiteSpace(request.Name))
@@ -71,7 +68,6 @@ namespace API.Controllers
 
             var categoryExists = await _db.Categories.AnyAsync(x =>
                 x.Id == request.CategoryId &&
-                x.CampusId == _campus.CampusId &&
                 !x.IsDeleted
             );
 
@@ -79,7 +75,6 @@ namespace API.Controllers
                 return BadRequest("Category not found");
 
             var duplicate = await _db.MenuItems.AnyAsync(x =>
-                x.CampusId == _campus.CampusId &&
                 x.Name == request.Name &&
                 !x.IsDeleted
             );
@@ -90,7 +85,6 @@ namespace API.Controllers
             var item = new MenuItem
             {
                 Id = Guid.NewGuid(),
-                CampusId = _campus.CampusId,
                 CategoryId = request.CategoryId,
                 Name = request.Name,
                 Price = request.Price,
@@ -104,7 +98,7 @@ namespace API.Controllers
             await _db.SaveChangesAsync();
 
             await _hub.Clients
-            .Group($"campus-{_campus.CampusId}")
+            .All
             .SendAsync("MenuItemCreated", new
             {
                 id = item.Id,
@@ -123,23 +117,19 @@ namespace API.Controllers
         // UPDATE (OPTIMISTIC LOCK)
         // =========================
         [HttpPut("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Update(Guid id, UpdateMenuItemRequest request)
         {
             var item = await _db.MenuItems.FirstOrDefaultAsync(x =>
                 x.Id == id &&
-                x.CampusId == _campus.CampusId &&
                 !x.IsDeleted
             );
 
             if (item == null)
                 return NotFound();
 
-            if (item.xmin != request.xmin)
-                return Conflict("Data was modified by another user");
-
             var duplicate = await _db.MenuItems.AnyAsync(x =>
                 x.Id != id &&
-                x.CampusId == _campus.CampusId &&
                 x.Name == request.Name &&
                 !x.IsDeleted
             );
@@ -156,7 +146,7 @@ namespace API.Controllers
             await _db.SaveChangesAsync();
 
             await _hub.Clients
-            .Group($"campus-{_campus.CampusId}")
+            .All
             .SendAsync("MenuItemUpdated", new
             {
                 id = item.Id,
@@ -174,11 +164,11 @@ namespace API.Controllers
         // DELETE (SOFT)
         // =========================
         [HttpDelete("{id}")]
+        [Authorize(Roles = "Manager")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var item = await _db.MenuItems.FirstOrDefaultAsync(x =>
                 x.Id == id &&
-                x.CampusId == _campus.CampusId &&
                 !x.IsDeleted
             );
 
@@ -189,7 +179,7 @@ namespace API.Controllers
             await _db.SaveChangesAsync();
 
             await _hub.Clients
-            .Group($"campus-{_campus.CampusId}")
+            .All
             .SendAsync("MenuItemDeleted", new
             {
                 id = item.Id

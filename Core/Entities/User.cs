@@ -12,8 +12,6 @@ namespace Core.Entities
         public string Email { get; set; } = default!;
         public string PasswordHash { get; set; } = default!;
         public string? FullName { get; set; }
-        public Guid CampusId { get; set; }
-        public Campus Campus { get; set; } = default!;
 
         public bool IsActive { get; set; } = true;
         public bool IsDeleted { get; set; } = false;

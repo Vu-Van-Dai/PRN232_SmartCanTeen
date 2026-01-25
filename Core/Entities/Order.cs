@@ -10,9 +10,6 @@ namespace Core.Entities
 {
     public class Order : BaseEntity
     {
-        public Guid CampusId { get; set; }
-        public Campus Campus { get; set; } = default!;
-
         // ===== ONLINE =====
         public Guid? WalletId { get; set; }
         public Wallet? Wallet { get; set; }

@@ -33,7 +33,6 @@ namespace Application.Orders
                 _db.InventoryLogs.Add(new InventoryLog
                 {
                     Id = Guid.NewGuid(),
-                    CampusId = order.CampusId,
                     ItemId = oi.ItemId,
                     ChangeQuantity = -oi.Quantity,
                     Reason = InventoryLogReason.Sale,
@@ -43,7 +42,6 @@ namespace Application.Orders
                 });
 
                 await _notifier.MenuItemStockChanged(
-                    order.CampusId,
                     oi.ItemId,
                     oi.Item.InventoryQuantity
                 );

@@ -18,6 +18,7 @@ namespace Core.Enums
         Sale = 1,
         Damage = 2,
         Expired = 3,
-        Adjustment = 4
+        Adjustment = 4,
+        Restock = 5
     }
 }

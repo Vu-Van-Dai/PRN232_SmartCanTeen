@@ -15,13 +15,11 @@ namespace API.Controllers
     {
         private readonly AppDbContext _db;
         private readonly JwtTokenService _jwt;
-        private readonly ICurrentCampusService _campus;
 
-        public AuthController(AppDbContext db, JwtTokenService jwt, ICurrentCampusService campus)
+        public AuthController(AppDbContext db, JwtTokenService jwt)
         {
             _db = db;
             _jwt = jwt;
-            _campus = campus;
         }
 
         [HttpPost("login")]
@@ -32,22 +30,15 @@ namespace API.Controllers
                 .ThenInclude(x => x.Role)
                 .FirstOrDefaultAsync(x => x.Email == request.Email);
 
-            if (!user.IsActive)
-                return Unauthorized("Account is locked");
-
             if (user == null || !PasswordHasher.Verify(request.Password, user.PasswordHash))
                 return Unauthorized("Invalid credentials");
 
-
-            // Campus mặc định của user (admin seed)
-            var campusId = await _db.Wallets
-                .Where(w => w.UserId == user.Id && w.Status == WalletStatus.Active)
-                .Select(w => w.CampusId)
-                .FirstAsync();
+            if (!user.IsActive)
+                return Unauthorized("Account is locked");
 
             var roles = user.UserRoles.Select(r => r.Role.Name);
 
-            var token = _jwt.GenerateToken(user.Id, campusId, roles);
+            var token = _jwt.GenerateToken(user.Id, roles);
 
             return Ok(new LoginResponse
             {

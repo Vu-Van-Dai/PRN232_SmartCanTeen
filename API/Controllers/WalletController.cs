@@ -9,22 +9,48 @@ using System.Security.Claims;
 
 namespace API.Controllers
 {
+    [ApiController]
+    [Route("api/wallet")]
+    [Authorize(Roles = "Student,Parent")]
     public class WalletController : ControllerBase
     {
-        [Authorize]
-        [HttpPost("topup")]
-        public async Task<IActionResult> TopupWallet(
-    decimal amount,
-    AppDbContext db,
-    VnpayService vnpay)
+        private readonly AppDbContext _db;
+        private readonly VnpayService _vnpay;
+
+        public WalletController(AppDbContext db, VnpayService vnpay)
         {
+            _db = db;
+            _vnpay = vnpay;
+        }
+
+        [HttpPost("topup")]
+        public async Task<IActionResult> TopupWallet([FromQuery] decimal amount)
+        {
+            if (amount <= 0)
+                return BadRequest("Invalid amount");
+
             var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
-            var wallet = await db.Wallets.FirstAsync(x => x.UserId == userId && x.Status == WalletStatus.Active);
+            var wallet = await _db.Wallets
+                .FirstOrDefaultAsync(x => x.UserId == userId && x.Status == WalletStatus.Active);
+
+            if (wallet == null)
+            {
+                wallet = new Wallet
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    Balance = 0m,
+                    Status = WalletStatus.Active,
+                    CreatedAt = DateTime.UtcNow
+                };
+                _db.Wallets.Add(wallet);
+                await _db.SaveChangesAsync();
+            }
 
             var txnRef = Guid.NewGuid().ToString("N");
 
-            db.VnpayTransactions.Add(new VnpayTransaction
+            _db.VnpayTransactions.Add(new VnpayTransaction
             {
                 Id = Guid.NewGuid(),
                 VnpTxnRef = txnRef,
@@ -33,9 +59,9 @@ namespace API.Controllers
                 WalletId = wallet.Id
             });
 
-            await db.SaveChangesAsync();
+            await _db.SaveChangesAsync();
 
-            var url = vnpay.CreatePaymentUrl(amount, txnRef, "Nap tien vi");
+            var url = _vnpay.CreatePaymentUrl(amount, txnRef, "Nap tien vi");
 
             return Ok(new { paymentUrl = url });
         }

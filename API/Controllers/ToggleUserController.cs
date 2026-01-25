@@ -8,18 +8,14 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/admin/users")]
-    [Authorize(Roles = "AdminSystem,AdminCampus")]
+    [Authorize(Roles = "AdminSystem")]
     public class ToggleUserController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
 
-        public ToggleUserController(
-            AppDbContext db,
-            ICurrentCampusService campus)
+        public ToggleUserController(AppDbContext db)
         {
             _db = db;
-            _campus = campus;
         }
 
         // ============================
@@ -39,13 +35,6 @@ namespace API.Controllers
             var currentUserId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
             if (user.Id == currentUserId)
                 return BadRequest("Cannot toggle yourself");
-
-            // ❌ AdminCampus chỉ được toggle user cùng campus
-            if (User.IsInRole("AdminCampus") &&
-                user.CampusId != _campus.CampusId)
-            {
-                return Forbid();
-            }
 
             // ❌ Không cho khóa AdminSystem
             var isAdminSystem = user.UserRoles.Any(r =>

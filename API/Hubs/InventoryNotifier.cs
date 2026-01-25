@@ -13,17 +13,14 @@ namespace API.Hubs
         }
 
         public async Task MenuItemStockChanged(
-            Guid campusId,
             Guid itemId,
             int inventoryQuantity)
         {
-            await _hub.Clients
-                .Group($"campus-{campusId}")
-                .SendAsync("MenuItemStockChanged", new
-                {
-                    itemId,
-                    inventoryQuantity
-                });
+            await _hub.Clients.All.SendAsync("MenuItemStockChanged", new
+            {
+                itemId,
+                inventoryQuantity
+            });
         }
     }
 }

@@ -9,20 +9,15 @@ namespace Infrastructure.Persistence;
 
 public class AppDbContext : DbContext
 {
-    private readonly ICurrentCampusService _currentCampus;
-    private readonly Guid _campusId;
-    public AppDbContext(DbContextOptions<AppDbContext> options, ICurrentCampusService? currentCampus = null)
+    public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
     {
-        _currentCampus = currentCampus;
-        _campusId = currentCampus?.CampusId ?? Guid.Empty;
     }
 
     // ========= DbSets =========
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
-    public DbSet<Campus> Campuses => Set<Campus>();
     public DbSet<StaffAssignment> StaffAssignments => Set<StaffAssignment>();
     public DbSet<UserRelation> UserRelations => Set<UserRelation>();
     public DbSet<DailyRevenue> DailyRevenues => Set<DailyRevenue>();
@@ -49,98 +44,25 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<MenuItem>()
             .HasQueryFilter(x =>
-                !x.IsDeleted &&
-                (_campusId == Guid.Empty || x.CampusId == _campusId)
+                !x.IsDeleted
             );
 
         modelBuilder.Entity<Category>()
             .HasQueryFilter(x =>
-                !x.IsDeleted &&
-                (_campusId == Guid.Empty || x.CampusId == _campusId)
+                !x.IsDeleted
             );
 
-        modelBuilder.Entity<Order>()
-            .HasQueryFilter(x =>
-                _campusId == Guid.Empty || x.CampusId == _campusId
-            );
-
-        modelBuilder.Entity<Transaction>()
-            .HasQueryFilter(x =>
-                _campusId == Guid.Empty || x.CampusId == _campusId
-            );
         modelBuilder.Entity<DailyRevenue>(entity =>
         {
             entity.HasKey(x => x.Id);
 
-            entity.HasIndex(x => new { x.CampusId, x.Date })
+            entity.HasIndex(x => x.Date)
                   .IsUnique();
-
-            entity.HasOne(x => x.Campus)
-                  .WithMany()
-                  .HasForeignKey(x => x.CampusId);
 
             entity.HasOne(x => x.ClosedByUser)
                   .WithMany()
                   .HasForeignKey(x => x.ClosedByUserId);
         });
-        //seed data
-
-        var campusId = new Guid("11111111-1111-1111-1111-111111111111");
-
-        modelBuilder.Entity<Campus>().HasData(
-            new Campus
-            {
-                Id = campusId,
-                Code = "FPTU_DN",
-                Name = "FPT University Da Nang",
-                IsActive = true,
-                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            }
-        );
-
-        modelBuilder.Entity<Role>().HasData(
-            new Role { Id = 1, Name = "Admin" },
-            new Role { Id = 2, Name = "Manager" },
-            new Role { Id = 3, Name = "Staff" },
-            new Role { Id = 4, Name = "Student" },
-            new Role { Id = 5, Name = "Parent" },
-            new Role { Id = 6, Name = "Kitchen" }
-        );
-
-        var adminId = new Guid("22222222-2222-2222-2222-222222222222");
-
-        modelBuilder.Entity<User>().HasData(
-            new User
-            {
-                Id = adminId,
-                Email = "admin@canteen.com",
-                PasswordHash = "HASHED_PASSWORD",
-                FullName = "System Admin",
-                IsActive = true,
-                IsDeleted = false,
-                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            }
-        );
-
-        modelBuilder.Entity<UserRole>().HasData(
-            new UserRole
-            {
-                UserId = adminId,
-                RoleId = 1
-            }
-        );
-
-        modelBuilder.Entity<Wallet>().HasData(
-            new Wallet
-            {
-                Id = new Guid("33333333-3333-3333-3333-333333333333"),
-                UserId = adminId,
-                CampusId = campusId,
-                Balance = 0,
-                Status = WalletStatus.Active,
-                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            }
-        );
 
         // =========================
         // USERS
@@ -184,20 +106,6 @@ public class AppDbContext : DbContext
         });
 
         // =========================
-        // CAMPUS
-        // =========================
-        modelBuilder.Entity<Campus>(entity =>
-        {
-            entity.HasKey(x => x.Id);
-
-            entity.Property(x => x.Code)
-                  .IsRequired()
-                  .HasMaxLength(50);
-
-            entity.HasIndex(x => x.Code).IsUnique();
-        });
-
-        // =========================
         // STAFF ASSIGNMENT
         // =========================
         modelBuilder.Entity<StaffAssignment>(entity =>
@@ -207,10 +115,6 @@ public class AppDbContext : DbContext
             entity.HasOne(x => x.User)
                   .WithOne()
                   .HasForeignKey<StaffAssignment>(x => x.UserId);
-
-            entity.HasOne(x => x.Campus)
-                  .WithMany()
-                  .HasForeignKey(x => x.CampusId);
         });
 
         // =========================
@@ -237,10 +141,6 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Category>(entity =>
         {
             entity.HasKey(x => x.Id);
-
-            entity.HasOne(x => x.Campus)
-                  .WithMany()
-                  .HasForeignKey(x => x.CampusId);
         });
 
         // =========================
@@ -250,17 +150,12 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(x => x.Id);
 
-            entity.HasOne(x => x.Campus)
-                  .WithMany()
-                  .HasForeignKey(x => x.CampusId);
-
             entity.HasOne(x => x.Category)
                   .WithMany()
                   .HasForeignKey(x => x.CategoryId);
 
-            // PostgreSQL optimistic concurrency
-            entity.Property<uint>("xmin")
-                  .IsConcurrencyToken();
+            // NOTE: Do not map PostgreSQL system column xmin here.
+            // Some dev DBs are created outside EF migrations and won't have a physical xmin column.
         });
 
         // =========================
@@ -273,10 +168,6 @@ public class AppDbContext : DbContext
             entity.HasOne(x => x.Item)
                   .WithMany()
                   .HasForeignKey(x => x.ItemId);
-
-            entity.HasOne(x => x.Campus)
-                  .WithMany()
-                  .HasForeignKey(x => x.CampusId);
 
             entity.HasOne(x => x.PerformedByUser)
                   .WithMany()
@@ -294,12 +185,8 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(x => x.UserId);
 
-            entity.HasOne(x => x.Campus)
-                  .WithMany()
-                  .HasForeignKey(x => x.CampusId);
-
-            // 1 user chỉ có 1 wallet Active / campus
-            entity.HasIndex(x => new { x.UserId, x.CampusId })
+            // 1 user chỉ có 1 wallet Active
+            entity.HasIndex(x => x.UserId)
                   .IsUnique()
                   .HasFilter("\"Status\" = 0"); // WalletStatus.Active
         });
@@ -324,10 +211,6 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(x => x.Id);
 
-            entity.HasOne(x => x.Campus)
-                  .WithMany()
-                  .HasForeignKey(x => x.CampusId);
-
             entity.HasOne(x => x.User)
                   .WithMany()
                   .HasForeignKey(x => x.UserId);
@@ -347,10 +230,6 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Order>(entity =>
         {
             entity.HasKey(x => x.Id);
-
-            entity.HasOne(x => x.Campus)
-                  .WithMany()
-                  .HasForeignKey(x => x.CampusId);
 
             entity.HasOne(x => x.Wallet)
                   .WithMany()
@@ -383,10 +262,6 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(x => x.Id);
 
-            entity.HasOne(x => x.Campus)
-                  .WithMany()
-                  .HasForeignKey(x => x.CampusId);
-
             entity.HasOne(x => x.Wallet)
                   .WithMany()
                   .HasForeignKey(x => x.WalletId)
@@ -418,12 +293,15 @@ public class AppDbContext : DbContext
     private void PreventUpdateClosedShift()
     {
         var modifiedShifts = ChangeTracker.Entries<Shift>()
-            .Where(e => e.State == EntityState.Modified)
-            .Select(e => e.Entity);
+            .Where(e => e.State == EntityState.Modified);
 
-        foreach (var shift in modifiedShifts)
+        foreach (var entry in modifiedShifts)
         {
-            if (shift.Status == ShiftStatus.Closed)
+            // Block changes ONLY when the shift was already closed in the DB.
+            // This allows the legitimate transition Open/Declaring/... -> Closed.
+            var originalStatus = entry.OriginalValues.GetValue<ShiftStatus>(nameof(Shift.Status));
+
+            if (originalStatus == ShiftStatus.Closed)
                 throw new InvalidOperationException("Closed shift cannot be modified");
         }
     }

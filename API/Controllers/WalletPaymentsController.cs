@@ -14,14 +14,10 @@ namespace API.Controllers
     public class WalletPaymentsController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
 
-        public WalletPaymentsController(
-            AppDbContext db,
-            ICurrentCampusService campus)
+        public WalletPaymentsController(AppDbContext db)
         {
             _db = db;
-            _campus = campus;
         }
 
         [HttpPost("{orderId}")]
@@ -38,8 +34,7 @@ namespace API.Controllers
                 .FirstOrDefaultAsync(x =>
                     x.Id == orderId &&
                     x.OrderSource == OrderSource.Online &&
-                    x.Status == OrderStatus.Pending &&
-                    x.CampusId == _campus.CampusId
+                    x.Status == OrderStatus.Pending
                 );
 
             if (order == null)
@@ -47,7 +42,6 @@ namespace API.Controllers
 
             var wallet = await _db.Wallets.FirstOrDefaultAsync(x =>
                 x.UserId == userId &&
-                x.CampusId == _campus.CampusId &&
                 x.Status == WalletStatus.Active
             );
 
@@ -64,7 +58,6 @@ namespace API.Controllers
             _db.Transactions.Add(new Transaction
             {
                 Id = Guid.NewGuid(),
-                CampusId = _campus.CampusId,
                 WalletId = wallet.Id,
                 OrderId = order.Id,
                 Amount = order.TotalPrice,
@@ -105,7 +98,6 @@ namespace API.Controllers
                 _db.InventoryLogs.Add(new InventoryLog
                 {
                     Id = Guid.NewGuid(),
-                    CampusId = order.CampusId,
                     ItemId = item.ItemId,
                     ChangeQuantity = -item.Quantity,
                     Reason = InventoryLogReason.Sale,

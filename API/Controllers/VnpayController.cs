@@ -113,7 +113,6 @@ namespace API.Controllers
                     _db.Transactions.Add(new Transaction
                     {
                         Id = Guid.NewGuid(),
-                        CampusId = wallet.CampusId,
                         WalletId = wallet.Id,
                         Amount = txn.Amount,
                         Type = TransactionType.Credit,
@@ -140,34 +139,33 @@ namespace API.Controllers
 
             if (txn.Purpose == PaymentPurpose.OfflineOrder && order != null)
             {
-                await _managementHub.Clients
-                    .Group($"campus-{order.CampusId}")
-                    .SendAsync("OrderPaid", new
-                    {
-                        orderId = order.Id,
-                        shiftId = order.ShiftId,
-                        amount = txn.Amount,
-                        method = PaymentMethod.Qr
-                    });
+                await _managementHub.Clients.All.SendAsync("OrderPaid", new
+                {
+                    orderId = order.Id,
+                    shiftId = order.ShiftId,
+                    amount = txn.Amount,
+                    method = PaymentMethod.Qr
+                });
 
-                await _hub.Clients
-                    .Group(order.ShiftId.ToString())
-                    .SendAsync("OrderPaid", new
-                    {
-                        orderId = order.Id,
-                        amount = txn.Amount
-                    });
+                if (order.ShiftId != null)
+                {
+                    await _hub.Clients
+                        .Group(order.ShiftId.Value.ToString())
+                        .SendAsync("OrderPaid", new
+                        {
+                            orderId = order.Id,
+                            amount = txn.Amount
+                        });
+                }
             }
 
             if (txn.Purpose == PaymentPurpose.WalletTopup && wallet != null)
             {
-                await _managementHub.Clients
-                    .Group($"campus-{wallet.CampusId}")
-                    .SendAsync("WalletTopup", new
-                    {
-                        walletId = wallet.Id,
-                        amount = txn.Amount
-                    });
+                await _managementHub.Clients.All.SendAsync("WalletTopup", new
+                {
+                    walletId = wallet.Id,
+                    amount = txn.Amount
+                });
             }
 
             return Ok();

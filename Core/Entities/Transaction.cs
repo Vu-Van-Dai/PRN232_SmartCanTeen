@@ -10,9 +10,6 @@ namespace Core.Entities
 {
     public class Transaction : BaseEntity
     {
-        public Guid CampusId { get; set; }
-        public Campus Campus { get; set; } = default!;
-
         public Guid? WalletId { get; set; }
         public Wallet? Wallet { get; set; }
 

@@ -14,16 +14,13 @@ namespace API.Controllers
     public class KitchenController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly ICurrentCampusService _campus;
         private readonly IHubContext<OrderHub> _orderHub;
 
         public KitchenController(
             AppDbContext db,
-            ICurrentCampusService campus,
             IHubContext<OrderHub> orderHub)
         {
             _db = db;
-            _campus = campus;
             _orderHub = orderHub;
         }
 
@@ -37,7 +34,6 @@ namespace API.Controllers
 
             var urgent = await _db.Orders
                 .Where(x =>
-                    x.CampusId == _campus.CampusId &&
                     x.Status == OrderStatus.Preparing &&
                     x.IsUrgent
                 )
@@ -46,7 +42,6 @@ namespace API.Controllers
 
             var upcoming = await _db.Orders
                 .Where(x =>
-                    x.CampusId == _campus.CampusId &&
                     x.Status == OrderStatus.SystemHolding &&
                     x.PickupTime != null &&
                     x.PickupTime <= now.AddMinutes(30)
@@ -65,7 +60,6 @@ namespace API.Controllers
         {
             var order = await _db.Orders.FirstOrDefaultAsync(x =>
                 x.Id == orderId &&
-                x.CampusId == _campus.CampusId &&
                 (x.Status == OrderStatus.SystemHolding ||
                  x.Status == OrderStatus.Paid)
             );
@@ -88,7 +82,6 @@ namespace API.Controllers
         {
             var order = await _db.Orders.FirstOrDefaultAsync(x =>
                 x.Id == orderId &&
-                x.CampusId == _campus.CampusId &&
                 x.Status == OrderStatus.Preparing
             );
 
