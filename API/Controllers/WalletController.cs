@@ -15,12 +15,12 @@ namespace API.Controllers
     public class WalletController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly VnpayService _vnpay;
+        private readonly PayosService _payos;
 
-        public WalletController(AppDbContext db, VnpayService vnpay)
+        public WalletController(AppDbContext db, PayosService payos)
         {
             _db = db;
-            _vnpay = vnpay;
+            _payos = payos;
         }
 
         [HttpPost("topup")]
@@ -28,6 +28,9 @@ namespace API.Controllers
         {
             if (amount <= 0)
                 return BadRequest("Invalid amount");
+
+            if (amount != Math.Floor(amount))
+                return BadRequest("Amount must be an integer (VND)");
 
             var userId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -48,12 +51,14 @@ namespace API.Controllers
                 await _db.SaveChangesAsync();
             }
 
-            var txnRef = Guid.NewGuid().ToString("N");
+            var orderCode = _payos.GenerateOrderCode();
+            var payRef = $"PAYOS-{orderCode}";
 
-            _db.VnpayTransactions.Add(new VnpayTransaction
+            _db.PaymentTransactions.Add(new PaymentTransaction
             {
                 Id = Guid.NewGuid(),
-                VnpTxnRef = txnRef,
+                PerformedByUserId = userId,
+                PaymentRef = payRef,
                 Amount = amount,
                 Purpose = PaymentPurpose.WalletTopup,
                 WalletId = wallet.Id
@@ -61,9 +66,21 @@ namespace API.Controllers
 
             await _db.SaveChangesAsync();
 
-            var url = _vnpay.CreatePaymentUrl(amount, txnRef, "Nap tien vi");
+            var amountInt = checked((int)amount);
+            var description = $"SC TOPUP {orderCode}";
+            var origin = Request.Headers.Origin.ToString();
+            if (string.IsNullOrWhiteSpace(origin))
+            {
+                var referer = Request.Headers.Referer.ToString();
+                if (Uri.TryCreate(referer, UriKind.Absolute, out var refererUri))
+                    origin = refererUri.GetLeftPart(UriPartial.Authority);
+            }
 
-            return Ok(new { paymentUrl = url });
+            var returnUrl = string.IsNullOrWhiteSpace(origin) ? null : $"{origin}/payos/return";
+            var cancelUrl = string.IsNullOrWhiteSpace(origin) ? null : $"{origin}/payos/cancel";
+            var link = await _payos.CreatePaymentLinkAsync(amountInt, orderCode, description, returnUrl, cancelUrl);
+
+            return Ok(new { paymentUrl = link.CheckoutUrl });
         }
     }
 }

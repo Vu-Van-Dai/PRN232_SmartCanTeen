@@ -32,7 +32,7 @@ public class AppDbContext : DbContext
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
-    public DbSet<VnpayTransaction> VnpayTransactions => Set<VnpayTransaction>();
+    public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
 
     // ========= Fluent API =========
     protected override void OnModelCreating(ModelBuilder modelBuilder)
