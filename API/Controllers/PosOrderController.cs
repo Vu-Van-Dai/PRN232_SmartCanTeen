@@ -18,16 +18,16 @@ namespace API.Controllers
     public class PosOrderController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly VnpayService _vnpay;
+        private readonly PayosService _payos;
         private readonly IHubContext<ManagementHub> _managementHub;
 
         public PosOrderController(
             AppDbContext db,
-            VnpayService vnpay,
+            PayosService payos,
             IHubContext<ManagementHub> managementHub)
         {
             _db = db;
-            _vnpay = vnpay;
+            _payos = payos;
             _managementHub = managementHub;
         }
         //helper
@@ -46,6 +46,9 @@ namespace API.Controllers
         {
             if (request.TotalPrice <= 0 || request.Items.Count == 0)
                 return BadRequest("Invalid order data");
+
+            if (request.TotalPrice != Math.Floor(request.TotalPrice))
+                return BadRequest("Amount must be an integer (VND)");
 
             var staffId = Guid.Parse(
                 User.FindFirstValue(ClaimTypes.NameIdentifier)!
@@ -117,13 +120,15 @@ namespace API.Controllers
                 });
             }
 
-            // 4️⃣ TẠO VNPAY TRANSACTION
-            var txnRef = Guid.NewGuid().ToString("N");
+            // 4️⃣ TẠO PAYOS PAYMENT LINK (store mapping in existing table)
+            var orderCode = _payos.GenerateOrderCode();
+            var payRef = $"PAYOS-{orderCode}";
 
-            _db.VnpayTransactions.Add(new VnpayTransaction
+            _db.PaymentTransactions.Add(new PaymentTransaction
             {
                 Id = Guid.NewGuid(),
-                VnpTxnRef = txnRef,
+                PerformedByUserId = staffId,
+                PaymentRef = payRef,
                 Amount = request.TotalPrice,
                 Purpose = PaymentPurpose.OfflineOrder,
                 OrderId = order.Id,
@@ -142,18 +147,125 @@ namespace API.Controllers
                     total = order.TotalPrice,
                     method = PaymentMethod.Qr
                 });
-            // 5️⃣ TẠO QR URL
-            var qrUrl = _vnpay.CreatePaymentUrl(
-                request.TotalPrice,
-                txnRef,
-                $"Thanh toan don offline {order.Id}"
-            );
+
+            // 5️⃣ TẠO CHECKOUT URL (PayOS)
+            var amountInt = checked((int)request.TotalPrice);
+            var description = $"SC OFF {orderCode}";
+            var origin = Request.Headers.Origin.ToString();
+            if (string.IsNullOrWhiteSpace(origin))
+            {
+                var referer = Request.Headers.Referer.ToString();
+                if (Uri.TryCreate(referer, UriKind.Absolute, out var refererUri))
+                    origin = refererUri.GetLeftPart(UriPartial.Authority);
+            }
+
+            var returnUrl = string.IsNullOrWhiteSpace(origin) ? null : $"{origin}/payos/return";
+            var cancelUrl = string.IsNullOrWhiteSpace(origin) ? null : $"{origin}/payos/cancel";
+            var link = await _payos.CreatePaymentLinkAsync(amountInt, orderCode, description, returnUrl, cancelUrl);
 
             return Ok(new
             {
                 orderId = order.Id,
-                qrUrl
+                qrUrl = link.CheckoutUrl
             });
+        }
+
+        /// <summary>
+        /// Tạo Order OFFLINE + CASH (thu tiền mặt tại quầy)
+        /// </summary>
+        [HttpPost("cash")]
+        public async Task<IActionResult> CreateCash(CreateOfflineOrderRequest request)
+        {
+            if (request.TotalPrice <= 0 || request.Items.Count == 0)
+                return BadRequest("Invalid order data");
+
+            if (request.TotalPrice != Math.Floor(request.TotalPrice))
+                return BadRequest("Amount must be an integer (VND)");
+
+            var staffId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+            var today = DateTime.UtcNow.Date;
+            var dayLocked = await _db.DailyRevenues.AnyAsync(x => x.Date == today);
+            if (dayLocked)
+                return BadRequest("Day already closed");
+
+            var shift = await _db.Shifts.FirstOrDefaultAsync(x =>
+                x.UserId == staffId &&
+                x.Status == ShiftStatus.Open);
+
+            if (shift == null)
+                return BadRequest("No open shift or shift is locked");
+
+            var order = new Order
+            {
+                Id = Guid.NewGuid(),
+                ShiftId = shift.Id,
+                OrderedByUserId = staffId,
+
+                OrderSource = OrderSource.Offline,
+                PaymentMethod = PaymentMethod.Cash,
+                Status = OrderStatus.Preparing,
+
+                PickupTime = null,
+                IsUrgent = true,
+
+                SubTotal = request.TotalPrice,
+                DiscountAmount = 0,
+                TotalPrice = request.TotalPrice,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _db.Orders.Add(order);
+
+            var itemIds = request.Items.Select(x => x.ItemId).ToList();
+            var menuItems = await _db.MenuItems
+                .Where(x =>
+                    itemIds.Contains(x.Id) &&
+                    !x.IsDeleted &&
+                    x.IsActive)
+                .ToDictionaryAsync(x => x.Id);
+
+            foreach (var i in request.Items)
+            {
+                if (!menuItems.TryGetValue(i.ItemId, out var item))
+                    return BadRequest($"Item {i.ItemId} not found");
+
+                _db.OrderItems.Add(new OrderItem
+                {
+                    Id = Guid.NewGuid(),
+                    OrderId = order.Id,
+                    ItemId = item.Id,
+                    Quantity = i.Quantity,
+                    UnitPrice = item.Price
+                });
+            }
+
+            // Update shift totals immediately for cash
+            shift.SystemCashTotal += request.TotalPrice;
+
+            await _db.SaveChangesAsync();
+
+            await _managementHub.Clients
+                .All
+                .SendAsync("OrderPaid", new
+                {
+                    orderId = order.Id,
+                    shiftId = shift.Id,
+                    amount = order.TotalPrice,
+                    method = PaymentMethod.Cash
+                });
+
+            await _managementHub.Clients
+                .All
+                .SendAsync("OrderCreated", new
+                {
+                    orderId = order.Id,
+                    shiftId = shift.Id,
+                    total = order.TotalPrice,
+                    method = PaymentMethod.Cash
+                });
+
+            return Ok(new { orderId = order.Id });
         }
     }
 }

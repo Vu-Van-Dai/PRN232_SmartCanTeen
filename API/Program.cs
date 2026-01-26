@@ -49,7 +49,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 //});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<JwtTokenService>();
-builder.Services.AddScoped<VnpayService>();
+builder.Services.Configure<PayosOptions>(builder.Configuration.GetSection("PayOS"));
+builder.Services.AddHttpClient<PayosService>();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<IInventoryNotifier, InventoryNotifier>();
 builder.Services.AddScoped<OrderSchedulerService>();

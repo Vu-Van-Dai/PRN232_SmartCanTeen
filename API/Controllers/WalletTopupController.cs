@@ -17,17 +17,17 @@ namespace API.Controllers
     public class WalletTopupController : ControllerBase
     {
         private readonly AppDbContext _db;
-        private readonly VnpayService _vnpay;
+        private readonly PayosService _payos;
         private readonly IHubContext<ManagementHub> _managementHub;
 
 
         public WalletTopupController(
             AppDbContext db,
-            VnpayService vnpay,
+            PayosService payos,
             IHubContext<ManagementHub> managementHub)
         {
             _db = db;
-            _vnpay = vnpay;
+            _payos = payos;
             _managementHub = managementHub;
         }
 
@@ -39,6 +39,9 @@ namespace API.Controllers
         {
             if (amount <= 0)
                 return BadRequest("Invalid amount");
+
+            if (amount != Math.Floor(amount))
+                return BadRequest("Amount must be an integer (VND)");
 
             var parentId = Guid.Parse(
                 User.FindFirstValue(ClaimTypes.NameIdentifier)!
@@ -53,13 +56,15 @@ namespace API.Controllers
             if (!access)
                 return Forbid();
 
-            // 2️⃣ Tạo VNPAY TRANSACTION
-            var txnRef = Guid.NewGuid().ToString("N");
+            // 2️⃣ Tạo PAYOS PAYMENT LINK (store mapping in existing table)
+            var orderCode = _payos.GenerateOrderCode();
+            var payRef = $"PAYOS-{orderCode}";
 
-            _db.VnpayTransactions.Add(new VnpayTransaction
+            _db.PaymentTransactions.Add(new PaymentTransaction
             {
                 Id = Guid.NewGuid(),
-                VnpTxnRef = txnRef,
+                PerformedByUserId = parentId,
+                PaymentRef = payRef,
                 WalletId = walletId,
                 Amount = amount,
                 Purpose = PaymentPurpose.WalletTopup,
@@ -69,14 +74,22 @@ namespace API.Controllers
 
             await _db.SaveChangesAsync();
 
-            // 3️⃣ Trả QR / redirect URL
-            var url = _vnpay.CreatePaymentUrl(
-                amount,
-                txnRef,
-                $"Nap tien vao vi {walletId}"
-            );
+            // 3️⃣ Trả checkout URL
+            var amountInt = checked((int)amount);
+            var description = $"SC TOPUP {orderCode}";
+            var origin = Request.Headers.Origin.ToString();
+            if (string.IsNullOrWhiteSpace(origin))
+            {
+                var referer = Request.Headers.Referer.ToString();
+                if (Uri.TryCreate(referer, UriKind.Absolute, out var refererUri))
+                    origin = refererUri.GetLeftPart(UriPartial.Authority);
+            }
 
-            return Ok(new { qrUrl = url });
+            var returnUrl = string.IsNullOrWhiteSpace(origin) ? null : $"{origin}/payos/return";
+            var cancelUrl = string.IsNullOrWhiteSpace(origin) ? null : $"{origin}/payos/cancel";
+            var link = await _payos.CreatePaymentLinkAsync(amountInt, orderCode, description, returnUrl, cancelUrl);
+
+            return Ok(new { qrUrl = link.CheckoutUrl });
         }
     }
 }
