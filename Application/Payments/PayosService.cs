@@ -105,6 +105,49 @@ namespace Application.Payments
             return string.Equals(computed, signature, StringComparison.OrdinalIgnoreCase);
         }
 
+        public async Task<PayosPaymentLinkInfoData?> GetPaymentLinkInfoAsync(
+            string id,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(id)) throw new ArgumentException("Id is required", nameof(id));
+
+            using var httpRequest = new HttpRequestMessage(
+                HttpMethod.Get,
+                new Uri(new Uri(_options.BaseUrl.TrimEnd('/')), $"/v2/payment-requests/{Uri.EscapeDataString(id)}"));
+
+            httpRequest.Headers.TryAddWithoutValidation("x-client-id", _options.ClientId);
+            httpRequest.Headers.TryAddWithoutValidation("x-api-key", _options.ApiKey);
+
+            using var response = await _http.SendAsync(httpRequest, ct);
+            var payload = await response.Content.ReadFromJsonAsync<PayosGetPaymentLinkInfoResponse>(cancellationToken: ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning(
+                    "PayOS get payment link info failed: HTTP {Status} {BodyCode} {Desc}",
+                    (int)response.StatusCode,
+                    payload?.Code,
+                    payload?.Desc);
+                return null;
+            }
+
+            if (payload?.Data == null)
+            {
+                _logger.LogWarning("PayOS get payment link info returned no data: {BodyCode} {Desc}", payload?.Code, payload?.Desc);
+                return null;
+            }
+
+            return payload.Data;
+        }
+
+        public Task<PayosPaymentLinkInfoData?> GetPaymentLinkInfoAsync(
+            int orderCode,
+            CancellationToken ct = default)
+        {
+            if (orderCode <= 0) throw new ArgumentOutOfRangeException(nameof(orderCode));
+            return GetPaymentLinkInfoAsync(orderCode.ToString(CultureInfo.InvariantCulture), ct);
+        }
+
         private string CreateSignatureForCreatePayment(int amount, string cancelUrl, string description, int orderCode, string returnUrl)
         {
             // Docs example: amount=$amount&cancelUrl=$cancelUrl&description=$description&orderCode=$orderCode&returnUrl=$returnUrl

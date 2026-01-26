@@ -10,7 +10,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/kitchen")]
-    [Authorize(Roles = "Staff,StaffKitchen,Manager")]
+    [Authorize(Roles = "Staff,StaffKitchen,Manager,AdminSystem")]
     public class KitchenController : ControllerBase
     {
         private readonly AppDbContext _db;
@@ -32,24 +32,99 @@ namespace API.Controllers
         {
             var now = DateTime.UtcNow;
 
-            var urgent = await _db.Orders
-                .Where(x =>
-                    x.Status == OrderStatus.Preparing &&
-                    x.IsUrgent
-                )
+            var pending = await _db.Orders
+                .AsNoTracking()
+                .Where(x => x.Status == OrderStatus.SystemHolding || x.Status == OrderStatus.Paid)
+                .Include(x => x.OrderedByUser)
+                .Include(x => x.Items)
+                    .ThenInclude(i => i.Item)
+                .OrderBy(x => x.PickupTime ?? x.CreatedAt)
+                .Select(x => new
+                {
+                    id = x.Id,
+                    createdAt = x.CreatedAt,
+                    pickupTime = x.PickupTime,
+                    status = x.Status.ToString(),
+                    isUrgent = x.IsUrgent,
+                    totalPrice = x.TotalPrice,
+                    orderedBy = x.OrderedByUser.FullName ?? x.OrderedByUser.Email,
+                    items = x.Items.Select(i => new
+                    {
+                        itemId = i.ItemId,
+                        name = i.Item.Name,
+                        quantity = i.Quantity,
+                        unitPrice = i.UnitPrice,
+                    })
+                })
+                .ToListAsync();
+
+            var preparing = await _db.Orders
+                .AsNoTracking()
+                .Where(x => x.Status == OrderStatus.Preparing)
+                .Include(x => x.OrderedByUser)
+                .Include(x => x.Items)
+                    .ThenInclude(i => i.Item)
                 .OrderBy(x => x.CreatedAt)
+                .Select(x => new
+                {
+                    id = x.Id,
+                    createdAt = x.CreatedAt,
+                    pickupTime = x.PickupTime,
+                    status = x.Status.ToString(),
+                    isUrgent = x.IsUrgent,
+                    totalPrice = x.TotalPrice,
+                    orderedBy = x.OrderedByUser.FullName ?? x.OrderedByUser.Email,
+                    items = x.Items.Select(i => new
+                    {
+                        itemId = i.ItemId,
+                        name = i.Item.Name,
+                        quantity = i.Quantity,
+                        unitPrice = i.UnitPrice,
+                    })
+                })
                 .ToListAsync();
 
-            var upcoming = await _db.Orders
+            var ready = await _db.Orders
+                .AsNoTracking()
+                .Where(x => x.Status == OrderStatus.Ready)
+                .Include(x => x.OrderedByUser)
+                .Include(x => x.Items)
+                    .ThenInclude(i => i.Item)
+                .OrderBy(x => x.CreatedAt)
+                .Select(x => new
+                {
+                    id = x.Id,
+                    createdAt = x.CreatedAt,
+                    pickupTime = x.PickupTime,
+                    status = x.Status.ToString(),
+                    isUrgent = x.IsUrgent,
+                    totalPrice = x.TotalPrice,
+                    orderedBy = x.OrderedByUser.FullName ?? x.OrderedByUser.Email,
+                    items = x.Items.Select(i => new
+                    {
+                        itemId = i.ItemId,
+                        name = i.Item.Name,
+                        quantity = i.Quantity,
+                        unitPrice = i.UnitPrice,
+                    })
+                })
+                .ToListAsync();
+
+            var urgent = preparing
+                .Where(x => x.isUrgent)
+                .OrderBy(x => x.createdAt)
+                .ToList();
+
+            var upcoming = pending
                 .Where(x =>
-                    x.Status == OrderStatus.SystemHolding &&
-                    x.PickupTime != null &&
-                    x.PickupTime <= now.AddMinutes(30)
+                    x.pickupTime != null &&
+                    x.pickupTime > now &&
+                    x.pickupTime <= now.AddMinutes(60)
                 )
-                .OrderBy(x => x.PickupTime)
-                .ToListAsync();
+                .OrderBy(x => x.pickupTime)
+                .ToList();
 
-            return Ok(new { urgent, upcoming });
+            return Ok(new { pending, preparing, ready, urgent, upcoming });
         }
 
         /// <summary>

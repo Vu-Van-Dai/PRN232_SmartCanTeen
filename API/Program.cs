@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using API.Seed;
+using API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -52,9 +53,12 @@ builder.Services.AddScoped<JwtTokenService>();
 builder.Services.Configure<PayosOptions>(builder.Configuration.GetSection("PayOS"));
 builder.Services.AddHttpClient<PayosService>();
 builder.Services.AddScoped<InventoryService>();
+builder.Services.AddScoped<PayosPaymentProcessor>();
 builder.Services.AddScoped<IInventoryNotifier, InventoryNotifier>();
 builder.Services.AddScoped<OrderSchedulerService>();
 builder.Services.AddHostedService<OrderSchedulerHostedService>();
+
+builder.Services.AddMemoryCache();
 
 builder.Services.AddSignalR();
 

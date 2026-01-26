@@ -11,6 +11,7 @@ using System;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Linq;
+using API.Services;
 
 namespace API.Controllers
 {
@@ -20,22 +21,16 @@ namespace API.Controllers
     {
         private readonly AppDbContext _db;
         private readonly PayosService _payos;
-        private readonly InventoryService _inventoryService;
-        private readonly IHubContext<OrderHub> _hub;
-        private readonly IHubContext<ManagementHub> _managementHub;
+        private readonly PayosPaymentProcessor _processor;
 
         public PayosController(
             AppDbContext db,
             PayosService payos,
-            InventoryService inventoryService,
-            IHubContext<OrderHub> hub,
-            IHubContext<ManagementHub> managementHub)
+            PayosPaymentProcessor processor)
         {
             _db = db;
             _payos = payos;
-            _inventoryService = inventoryService;
-            _hub = hub;
-            _managementHub = managementHub;
+            _processor = processor;
         }
 
         // Local-dev fallback: PayOS dashboard/webhook usually can't reach localhost.
@@ -51,102 +46,7 @@ namespace API.Controllers
             if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, "PAID", StringComparison.OrdinalIgnoreCase))
                 return Ok();
 
-            var payRef = $"PAYOS-{orderCode}";
-            var txn = await _db.PaymentTransactions.FirstOrDefaultAsync(x => x.PaymentRef == payRef);
-            if (txn == null || txn.IsSuccess)
-                return Ok();
-
-            using var dbTx = await _db.Database.BeginTransactionAsync();
-
-            Order? order = null;
-            Wallet? wallet = null;
-
-            try
-            {
-                if (txn.Purpose == PaymentPurpose.OfflineOrder)
-                {
-                    order = await _db.Orders
-                        .Include(o => o.Items)
-                        .FirstOrDefaultAsync(o => o.Id == txn.OrderId);
-
-                    if (order == null || order.Status != OrderStatus.Pending)
-                        throw new Exception("Invalid order");
-
-                    var shift = await _db.Shifts.FindAsync(txn.ShiftId);
-                    if (shift == null || shift.Status != ShiftStatus.Open)
-                        throw new Exception("Invalid shift");
-
-                    // Offline orders paid at POS go straight to preparing
-                    order.Status = OrderStatus.Preparing;
-                    order.IsUrgent = true;
-
-                    shift.SystemQrTotal += txn.Amount;
-
-                    await _inventoryService.DeductInventoryAsync(order, order.OrderedByUserId);
-                }
-
-                if (txn.Purpose == PaymentPurpose.WalletTopup)
-                {
-                    wallet = await _db.Wallets.FirstOrDefaultAsync(x => x.Id == txn.WalletId);
-                    if (wallet == null)
-                        throw new Exception("Wallet not found");
-
-                    wallet.Balance += txn.Amount;
-
-                    _db.Transactions.Add(new Transaction
-                    {
-                        Id = Guid.NewGuid(),
-                        WalletId = wallet.Id,
-                        Amount = txn.Amount,
-                        Type = TransactionType.Credit,
-                        Status = TransactionStatus.Success,
-                        PaymentMethod = PaymentMethod.Qr,
-                        PerformedByUserId = wallet.UserId,
-                        CreatedAt = DateTime.UtcNow
-                    });
-                }
-
-                txn.IsSuccess = true;
-                await _db.SaveChangesAsync();
-                await dbTx.CommitAsync();
-            }
-            catch
-            {
-                await dbTx.RollbackAsync();
-                return Ok();
-            }
-
-            if (txn.Purpose == PaymentPurpose.OfflineOrder && order != null)
-            {
-                await _managementHub.Clients.All.SendAsync("OrderPaid", new
-                {
-                    orderId = order.Id,
-                    shiftId = order.ShiftId,
-                    amount = txn.Amount,
-                    method = PaymentMethod.Qr
-                });
-
-                if (order.ShiftId != null)
-                {
-                    await _hub.Clients
-                        .Group(order.ShiftId.Value.ToString())
-                        .SendAsync("OrderPaid", new
-                        {
-                            orderId = order.Id,
-                            amount = txn.Amount
-                        });
-                }
-            }
-
-            if (txn.Purpose == PaymentPurpose.WalletTopup && wallet != null)
-            {
-                await _managementHub.Clients.All.SendAsync("WalletTopup", new
-                {
-                    walletId = wallet.Id,
-                    amount = txn.Amount
-                });
-            }
-
+            await _processor.TryMarkPaidAsync(orderCode, HttpContext.RequestAborted);
             return Ok();
         }
 
@@ -160,20 +60,10 @@ namespace API.Controllers
             if (txn == null || txn.IsSuccess)
                 return Ok();
 
-            // Cancel behavior for POS offline orders:
-            // - mark the pending order as cancelled to avoid accumulating pending QR orders
-            // - cashier can still create a CASH order from the POS UI
-            if (txn.Purpose == PaymentPurpose.OfflineOrder && txn.OrderId != null)
-            {
-                var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == txn.OrderId);
-                if (order != null && order.Status == OrderStatus.Pending)
-                {
-                    order.Status = OrderStatus.Cancelled;
-                }
-            }
-
-            // We keep txn.IsSuccess=false. Optionally delete txn later; for now, we just persist the cancel effect.
-            await _db.SaveChangesAsync();
+            // Intentionally no DB state change here:
+            // - In local dev, we rely on FE to bring the user back to POS.
+            // - The pending order is kept so cashier can switch to CASH without creating duplicates.
+            // - If the cashier wants to void the order, call /api/pos/orders/{orderId}/cancel.
             return Ok();
         }
 
@@ -203,117 +93,8 @@ namespace API.Controllers
 
             var payRef = $"PAYOS-{orderCode.Value}";
 
-            var txn = await _db.PaymentTransactions.FirstOrDefaultAsync(x => x.PaymentRef == payRef);
-            if (txn == null || txn.IsSuccess)
-                return Ok();
-
-            using var dbTx = await _db.Database.BeginTransactionAsync();
-
-            Order? order = null;
-            Wallet? wallet = null;
-
-            try
-            {
-                if (txn.Purpose == PaymentPurpose.OfflineOrder)
-                {
-                    order = await _db.Orders
-                        .Include(o => o.Items)
-                        .FirstOrDefaultAsync(o => o.Id == txn.OrderId);
-
-                    if (order == null || order.Status != OrderStatus.Pending)
-                        throw new Exception("Invalid order");
-
-                    var shift = await _db.Shifts.FindAsync(txn.ShiftId);
-                    if (shift == null || shift.Status != ShiftStatus.Open)
-                        throw new Exception("Invalid shift");
-
-                    if (order.OrderSource == OrderSource.Offline)
-                    {
-                        order.Status = OrderStatus.Preparing;
-                        order.IsUrgent = true;
-                    }
-                    else
-                    {
-                        if (order.PickupTime == null)
-                        {
-                            order.Status = OrderStatus.Preparing;
-                            order.IsUrgent = true;
-                        }
-                        else
-                        {
-                            order.Status = OrderStatus.SystemHolding;
-                            order.IsUrgent = false;
-                        }
-                    }
-
-                    shift.SystemQrTotal += txn.Amount;
-
-                    await _inventoryService.DeductInventoryAsync(order, order.OrderedByUserId);
-                }
-
-                if (txn.Purpose == PaymentPurpose.WalletTopup)
-                {
-                    wallet = await _db.Wallets.FirstOrDefaultAsync(x => x.Id == txn.WalletId);
-                    if (wallet == null)
-                        throw new Exception("Wallet not found");
-
-                    wallet.Balance += txn.Amount;
-
-                    _db.Transactions.Add(new Transaction
-                    {
-                        Id = Guid.NewGuid(),
-                        WalletId = wallet.Id,
-                        Amount = txn.Amount,
-                        Type = TransactionType.Credit,
-                        Status = TransactionStatus.Success,
-                        PaymentMethod = PaymentMethod.Qr,
-                        PerformedByUserId = wallet.UserId,
-                        CreatedAt = DateTime.UtcNow
-                    });
-                }
-
-                txn.IsSuccess = true;
-
-                await _db.SaveChangesAsync();
-                await dbTx.CommitAsync();
-            }
-            catch
-            {
-                await dbTx.RollbackAsync();
-                return Ok();
-            }
-
-            if (txn.Purpose == PaymentPurpose.OfflineOrder && order != null)
-            {
-                await _managementHub.Clients.All.SendAsync("OrderPaid", new
-                {
-                    orderId = order.Id,
-                    shiftId = order.ShiftId,
-                    amount = txn.Amount,
-                    method = PaymentMethod.Qr
-                });
-
-                if (order.ShiftId != null)
-                {
-                    await _hub.Clients
-                        .Group(order.ShiftId.Value.ToString())
-                        .SendAsync("OrderPaid", new
-                        {
-                            orderId = order.Id,
-                            amount = txn.Amount
-                        });
-                }
-            }
-
-            if (txn.Purpose == PaymentPurpose.WalletTopup && wallet != null)
-            {
-                await _managementHub.Clients.All.SendAsync("WalletTopup", new
-                {
-                    walletId = wallet.Id,
-                    amount = txn.Amount
-                });
-            }
-
+            // If txn is missing or already processed, the processor will no-op.
+            await _processor.TryMarkPaidAsync(orderCode.Value, HttpContext.RequestAborted);
             return Ok();
         }
 
