@@ -61,6 +61,43 @@ namespace Application.Payments
         public string? Description { get; set; }
     }
 
+    public sealed class PayosGetPaymentLinkInfoResponse
+    {
+        [JsonPropertyName("code")]
+        public string Code { get; set; } = null!;
+
+        [JsonPropertyName("desc")]
+        public string Desc { get; set; } = null!;
+
+        [JsonPropertyName("data")]
+        public PayosPaymentLinkInfoData? Data { get; set; }
+
+        [JsonPropertyName("signature")]
+        public string? Signature { get; set; }
+    }
+
+    public sealed class PayosPaymentLinkInfoData
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; }
+
+        [JsonPropertyName("orderCode")]
+        public int OrderCode { get; set; }
+
+        [JsonPropertyName("amount")]
+        public int Amount { get; set; }
+
+        [JsonPropertyName("amountPaid")]
+        public int AmountPaid { get; set; }
+
+        [JsonPropertyName("amountRemaining")]
+        public int AmountRemaining { get; set; }
+
+        // PayOS: PENDING | PAID | CANCELLED | EXPIRED
+        [JsonPropertyName("status")]
+        public string? Status { get; set; }
+    }
+
     public sealed class PayosWebhookPayload
     {
         [JsonPropertyName("code")]

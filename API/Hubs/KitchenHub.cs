@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 namespace API.Hubs
 {
-    [Authorize(Roles = "Staff")]
+    [Authorize(Roles = "Staff,StaffKitchen,Manager,AdminSystem")]
     public class KitchenHub : Hub
     {
         public async Task JoinCampus(string campusId)
