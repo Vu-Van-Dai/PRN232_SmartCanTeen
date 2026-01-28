@@ -21,6 +21,7 @@ namespace Core.Enums
         SystemHolding = 3,  // Hệ thống giữ (pre-order)
         Preparing = 4,      // Đang nấu
         Ready = 5,
-        Cancelled = 6 
+        Cancelled = 6,
+        Completed = 7
     }
 }

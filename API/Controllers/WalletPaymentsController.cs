@@ -29,6 +29,13 @@ namespace API.Controllers
 
             using var tx = await _db.Database.BeginTransactionAsync();
 
+            // Online revenue must belong to an active shift for reporting
+            var shift = await _db.Shifts
+                .OrderByDescending(s => s.OpenedAt)
+                .FirstOrDefaultAsync(s => s.Status == ShiftStatus.Open);
+            if (shift == null)
+                return BadRequest("No active shift");
+
             var order = await _db.Orders
                 .Include(x => x.Items)
                 .FirstOrDefaultAsync(x =>
@@ -83,6 +90,10 @@ namespace API.Controllers
                 }
             }
             order.PaymentMethod = PaymentMethod.Wallet;
+
+            // 3.5️⃣ LINK SHIFT + SYSTEM ONLINE TOTAL
+            order.ShiftId = shift.Id;
+            shift.SystemOnlineTotal += order.TotalPrice;
 
             // 4️⃣ TRỪ KHO + INVENTORY LOG
             foreach (var item in order.Items)
