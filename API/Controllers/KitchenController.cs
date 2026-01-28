@@ -10,7 +10,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/kitchen")]
-    [Authorize(Roles = "Staff,StaffKitchen,Manager,AdminSystem")]
+    [Authorize(Roles = "Staff,StaffKitchen,StaffCoordination,Manager,AdminSystem")]
     public class KitchenController : ControllerBase
     {
         private readonly AppDbContext _db;
@@ -131,6 +131,7 @@ namespace API.Controllers
         /// Bếp bấm "Nấu"
         /// </summary>
         [HttpPost("{orderId}/prepare")]
+        [Authorize(Roles = "StaffKitchen,Manager,AdminSystem")]
         public async Task<IActionResult> StartCooking(Guid orderId)
         {
             var order = await _db.Orders.FirstOrDefaultAsync(x =>
@@ -153,6 +154,7 @@ namespace API.Controllers
         /// Bếp bấm "Xong"
         /// </summary>
         [HttpPost("{orderId}/ready")]
+        [Authorize(Roles = "StaffKitchen,Manager,AdminSystem")]
         public async Task<IActionResult> MarkReady(Guid orderId)
         {
             var order = await _db.Orders.FirstOrDefaultAsync(x =>
@@ -175,6 +177,26 @@ namespace API.Controllers
                     pickupTime = order.PickupTime
                 });
 
+            return Ok();
+        }
+
+        /// <summary>
+        /// Nhân viên điều phối bấm "Đã giao" (đơn biến mất khỏi board)
+        /// </summary>
+        [HttpPost("{orderId}/complete")]
+        [Authorize(Roles = "StaffCoordination,Manager,AdminSystem")]
+        public async Task<IActionResult> Complete(Guid orderId)
+        {
+            var order = await _db.Orders.FirstOrDefaultAsync(x =>
+                x.Id == orderId &&
+                x.Status == OrderStatus.Ready
+            );
+
+            if (order == null)
+                return BadRequest("Invalid order");
+
+            order.Status = OrderStatus.Completed;
+            await _db.SaveChangesAsync();
             return Ok();
         }
     }

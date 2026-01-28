@@ -42,6 +42,7 @@ public static class DbSeeder
             "Staff",
             "StaffKitchen",
             "StaffPOS",
+            "StaffCoordination",
             "Student",
             "Parent"
         };
@@ -75,6 +76,7 @@ public static class DbSeeder
             new { Email = config["SeedTestUsers:ManagerEmail"] ?? "manager@smartcanteen.local", FullName = "Manager", Roles = new[] { "Manager" } },
             new { Email = config["SeedTestUsers:StaffEmail"] ?? "staff@smartcanteen.local", FullName = "Staff", Roles = new[] { "Staff" } },
             new { Email = config["SeedTestUsers:KitchenEmail"] ?? "kitchen@smartcanteen.local", FullName = "Staff Kitchen", Roles = new[] { "Staff", "StaffKitchen" } },
+            new { Email = config["SeedTestUsers:CoordinationeEmail"] ?? "coordination@smartcanteen.local", FullName = "Staff Coordination", Roles = new[] { "Staff", "StaffCoordination" } },
             new { Email = config["SeedTestUsers:PosEmail"] ?? "pos@smartcanteen.local", FullName = "Staff POS", Roles = new[] { "Staff", "StaffPOS" } },
             new { Email = config["SeedTestUsers:StudentEmail"] ?? "student@smartcanteen.local", FullName = "Student", Roles = new[] { "Student" } },
             new { Email = config["SeedTestUsers:ParentEmail"] ?? "parent@smartcanteen.local", FullName = "Parent", Roles = new[] { "Parent" } },
