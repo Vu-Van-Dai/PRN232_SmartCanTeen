@@ -1,4 +1,6 @@
 using API.Hubs;
+using API.Seed;
+using API.Services;
 using Application.JWTToken;
 using Application.Orders;
 using Application.Payments;
@@ -7,8 +9,7 @@ using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using API.Seed;
-using API.Services;
+using static System.Net.WebRequestMethods;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,7 +24,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:8080",
                 "http://localhost:5173",
                 "https://localhost:8080",
-                "https://localhost:5173"
+                "https://localhost:5173",
+                "https://smart-canteensystem.vercel.app"
             };
 
         policy
@@ -41,13 +43,6 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
-//builder.Services.AddScoped<ICurrentCampusService>(_ =>
-//{
-//    return new CurrentCampusService
-//    {
-//        CampusId = Guid.Parse("PUT-YOUR-TEST-CAMPUS-ID-HERE")
-//    };
-//});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.Configure<PayosOptions>(builder.Configuration.GetSection("PayOS"));
