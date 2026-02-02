@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace API.Controllers
 {
@@ -168,14 +169,23 @@ namespace API.Controllers
             order.Status = OrderStatus.Ready;
             await _db.SaveChangesAsync();
 
-            // 🔔 THÔNG BÁO CHO SINH VIÊN
-            await _orderHub.Clients
-                .User(order.OrderedByUserId.ToString())
-                .SendAsync("OrderReady", new
-                {
-                    orderId = order.Id,
-                    pickupTime = order.PickupTime
-                });
+            // 🔔 THÔNG BÁO CHO SINH VIÊN (nếu bật)
+            var notifyEnabled = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.Id == order.OrderedByUserId)
+                .Select(u => u.OrderReadyNotificationsEnabled)
+                .FirstOrDefaultAsync();
+
+            if (notifyEnabled)
+            {
+                await _orderHub.Clients
+                    .User(order.OrderedByUserId.ToString())
+                    .SendAsync("OrderReady", new
+                    {
+                        orderId = order.Id,
+                        pickupTime = order.PickupTime
+                    });
+            }
 
             return Ok();
         }
@@ -197,6 +207,24 @@ namespace API.Controllers
 
             order.Status = OrderStatus.Completed;
             await _db.SaveChangesAsync();
+
+            // 🔔 THÔNG BÁO CHO SINH VIÊN (dùng chung toggle hiện tại)
+            var notifyEnabled = await _db.Users
+                .AsNoTracking()
+                .Where(u => u.Id == order.OrderedByUserId)
+                .Select(u => u.OrderReadyNotificationsEnabled)
+                .FirstOrDefaultAsync();
+
+            if (notifyEnabled)
+            {
+                await _orderHub.Clients
+                    .User(order.OrderedByUserId.ToString())
+                    .SendAsync("OrderCompleted", new
+                    {
+                        orderId = order.Id
+                    });
+            }
+
             return Ok();
         }
     }
