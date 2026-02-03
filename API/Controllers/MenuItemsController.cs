@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace API.Controllers
 {
@@ -31,6 +34,7 @@ namespace API.Controllers
         {
             var items = await _db.MenuItems
                 .Include(x => x.Category)
+                .Include(x => x.Images)
                 .Where(x =>
                     !x.IsDeleted
                 )
@@ -42,6 +46,10 @@ namespace API.Controllers
                     Name = x.Name,
                     Price = x.Price,
                     InventoryQuantity = x.InventoryQuantity,
+                    ImageUrls = x.Images
+                        .OrderBy(i => i.SortOrder)
+                        .Select(i => i.Url)
+                        .ToList(),
                     ImageUrl = x.ImageUrl,
                     IsActive = x.IsActive
                 })
@@ -82,6 +90,14 @@ namespace API.Controllers
             if (duplicate)
                 return BadRequest("Menu item name already exists");
 
+            var urls = (request.ImageUrls ?? new List<string>())
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Select(u => u.Trim())
+                .ToList();
+
+            if (urls.Count == 0 && !string.IsNullOrWhiteSpace(request.ImageUrl))
+                urls.Add(request.ImageUrl.Trim());
+
             var item = new MenuItem
             {
                 Id = Guid.NewGuid(),
@@ -89,12 +105,28 @@ namespace API.Controllers
                 Name = request.Name,
                 Price = request.Price,
                 InventoryQuantity = request.InventoryQuantity,
-                ImageUrl = request.ImageUrl,
+                ImageUrl = urls.FirstOrDefault(),
                 IsActive = request.IsActive,
                 IsDeleted = false
             };
 
             _db.MenuItems.Add(item);
+
+            if (urls.Count > 0)
+            {
+                for (var i = 0; i < urls.Count; i++)
+                {
+                    _db.MenuItemImages.Add(new MenuItemImage
+                    {
+                        Id = Guid.NewGuid(),
+                        MenuItemId = item.Id,
+                        Url = urls[i],
+                        SortOrder = i,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
+
             await _db.SaveChangesAsync();
 
             await _hub.Clients
@@ -107,6 +139,7 @@ namespace API.Controllers
                 price = item.Price,
                 inventoryQuantity = item.InventoryQuantity,
                 imageUrl = item.ImageUrl,
+                imageUrls = urls,
                 isActive = item.IsActive
             });
 
@@ -137,11 +170,39 @@ namespace API.Controllers
             if (duplicate)
                 return BadRequest("Menu item name already exists");
 
+            var urls = (request.ImageUrls ?? new List<string>())
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .Select(u => u.Trim())
+                .ToList();
+
+            if (urls.Count == 0 && !string.IsNullOrWhiteSpace(request.ImageUrl))
+                urls.Add(request.ImageUrl.Trim());
+
             item.Name = request.Name;
             item.Price = request.Price;
             item.InventoryQuantity = request.InventoryQuantity;
-            item.ImageUrl = request.ImageUrl;
+            item.ImageUrl = urls.FirstOrDefault();
             item.IsActive = request.IsActive;
+
+            // Replace images (simple approach)
+            var existing = await _db.MenuItemImages.Where(x => x.MenuItemId == item.Id).ToListAsync();
+            if (existing.Count > 0)
+                _db.MenuItemImages.RemoveRange(existing);
+
+            if (urls.Count > 0)
+            {
+                for (var i = 0; i < urls.Count; i++)
+                {
+                    _db.MenuItemImages.Add(new MenuItemImage
+                    {
+                        Id = Guid.NewGuid(),
+                        MenuItemId = item.Id,
+                        Url = urls[i],
+                        SortOrder = i,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+            }
 
             await _db.SaveChangesAsync();
 
@@ -154,6 +215,7 @@ namespace API.Controllers
                 price = item.Price,
                 inventoryQuantity = item.InventoryQuantity,
                 imageUrl = item.ImageUrl,
+                imageUrls = urls,
                 isActive = item.IsActive
             });
 

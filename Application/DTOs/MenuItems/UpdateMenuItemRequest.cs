@@ -11,6 +11,7 @@ namespace Application.DTOs.MenuItems
         public string Name { get; set; } = default!;
         public decimal Price { get; set; }
         public int InventoryQuantity { get; set; }
+        public List<string>? ImageUrls { get; set; }
         public string? ImageUrl { get; set; }
         public bool IsActive { get; set; }
     }

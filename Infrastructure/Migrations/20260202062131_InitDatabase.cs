@@ -277,6 +277,27 @@ namespace Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "MenuItemImages",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    MenuItemId = table.Column<Guid>(type: "uuid", nullable: false),
+                    Url = table.Column<string>(type: "text", nullable: false),
+                    SortOrder = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_MenuItemImages", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_MenuItemImages_MenuItems_MenuItemId",
+                        column: x => x.MenuItemId,
+                        principalTable: "MenuItems",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Orders",
                 columns: table => new
                 {
@@ -430,6 +451,11 @@ namespace Infrastructure.Migrations
                 column: "PerformedByUserId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_MenuItemImages_MenuItemId_SortOrder",
+                table: "MenuItemImages",
+                columns: new[] { "MenuItemId", "SortOrder" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_MenuItems_CategoryId",
                 table: "MenuItems",
                 column: "CategoryId");
@@ -517,6 +543,9 @@ namespace Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "InventoryLogs");
+
+            migrationBuilder.DropTable(
+                name: "MenuItemImages");
 
             migrationBuilder.DropTable(
                 name: "OrderItems");

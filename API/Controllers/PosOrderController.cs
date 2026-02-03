@@ -26,6 +26,7 @@ namespace API.Controllers
         private readonly IHubContext<ManagementHub> _managementHub;
         private readonly PayosPaymentProcessor _processor;
         private readonly IMemoryCache _cache;
+        private readonly BusinessDayGate _dayGate;
 
         public PosOrderController(
             AppDbContext db,
@@ -33,7 +34,8 @@ namespace API.Controllers
             InventoryService inventoryService,
             IHubContext<ManagementHub> managementHub,
             PayosPaymentProcessor processor,
-            IMemoryCache cache)
+            IMemoryCache cache,
+            BusinessDayGate dayGate)
         {
             _db = db;
             _payos = payos;
@@ -41,14 +43,9 @@ namespace API.Controllers
             _managementHub = managementHub;
             _processor = processor;
             _cache = cache;
+            _dayGate = dayGate;
         }
-        //helper
-        public async Task<bool> IsDayLocked(DateTime date)
-        {
-            return await _db.DailyRevenues.AnyAsync(x =>
-                x.Date == date.Date
-            );
-        }
+
 
         /// <summary>
         /// Tạo Order OFFLINE + QR
@@ -56,24 +53,19 @@ namespace API.Controllers
         [HttpPost]
         public async Task<IActionResult> Create(CreateOfflineOrderRequest request)
         {
-            if (request.TotalPrice <= 0 || request.Items.Count == 0)
+            var gate = await _dayGate.EnsurePosOperationsAllowedAsync();
+            if (!gate.allowed)
+                return BadRequest(gate.reason);
+
+            if (request.Items.Count == 0)
                 return BadRequest("Invalid order data");
 
-            if (request.TotalPrice != Math.Floor(request.TotalPrice))
-                return BadRequest("Amount must be an integer (VND)");
+            if (request.Items.Any(x => x.Quantity <= 0))
+                return BadRequest("Invalid quantity");
 
             var staffId = Guid.Parse(
                 User.FindFirstValue(ClaimTypes.NameIdentifier)!
             );
-
-            var today = DateTime.UtcNow.Date;
-
-            var dayLocked = await _db.DailyRevenues.AnyAsync(x =>
-                x.Date == today
-            );
-
-            if (dayLocked)
-                return BadRequest("Day already closed");
 
             // 1️⃣ LẤY CA ĐANG MỞ
             var shift = await _db.Shifts.FirstOrDefaultAsync(x =>
@@ -98,9 +90,9 @@ namespace API.Controllers
                 PickupTime = null,
                 IsUrgent = true,
 
-                SubTotal = request.TotalPrice,
+                SubTotal = 0,
                 DiscountAmount = 0,
-                TotalPrice = request.TotalPrice,
+                TotalPrice = 0,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -122,6 +114,9 @@ namespace API.Controllers
                 if (!menuItems.TryGetValue(i.ItemId, out var item))
                     return BadRequest($"Item {i.ItemId} not found");
 
+                if (i.Quantity <= 0)
+                    return BadRequest("Invalid quantity");
+
                 _db.OrderItems.Add(new OrderItem
                 {
                     Id = Guid.NewGuid(),
@@ -132,6 +127,21 @@ namespace API.Controllers
                 });
             }
 
+            // 3.5️⃣ Compute totals (VAT 8%, discount reserved for future coupons)
+            const decimal vatRate = 0.08m;
+            var subTotal = request.Items.Sum(x => menuItems[x.ItemId].Price * x.Quantity);
+            var discount = 0m;
+            var baseAmount = subTotal - discount;
+            if (baseAmount < 0) baseAmount = 0;
+
+            // Round to VND integer
+            var vatAmount = decimal.Round(baseAmount * vatRate, 0, MidpointRounding.AwayFromZero);
+            var total = decimal.Round(baseAmount + vatAmount, 0, MidpointRounding.AwayFromZero);
+
+            order.SubTotal = subTotal;
+            order.DiscountAmount = discount;
+            order.TotalPrice = total;
+
             // 4️⃣ TẠO PAYOS PAYMENT LINK (store mapping in existing table)
             var orderCode = _payos.GenerateOrderCode();
             var payRef = $"PAYOS-{orderCode}";
@@ -141,7 +151,7 @@ namespace API.Controllers
                 Id = Guid.NewGuid(),
                 PerformedByUserId = staffId,
                 PaymentRef = payRef,
-                Amount = request.TotalPrice,
+                Amount = order.TotalPrice,
                 Purpose = PaymentPurpose.OfflineOrder,
                 OrderId = order.Id,
                 ShiftId = shift.Id,
@@ -161,7 +171,7 @@ namespace API.Controllers
                 });
 
             // 5️⃣ TẠO CHECKOUT URL (PayOS)
-            var amountInt = checked((int)request.TotalPrice);
+            var amountInt = checked((int)order.TotalPrice);
             var description = $"SC OFF {orderCode}";
             var origin = Request.Headers.Origin.ToString();
             if (string.IsNullOrWhiteSpace(origin))
@@ -275,18 +285,17 @@ namespace API.Controllers
         [HttpPost("cash")]
         public async Task<IActionResult> CreateCash(CreateOfflineOrderRequest request)
         {
-            if (request.TotalPrice <= 0 || request.Items.Count == 0)
+            var gate = await _dayGate.EnsurePosOperationsAllowedAsync();
+            if (!gate.allowed)
+                return BadRequest(gate.reason);
+
+            if (request.Items.Count == 0)
                 return BadRequest("Invalid order data");
 
-            if (request.TotalPrice != Math.Floor(request.TotalPrice))
-                return BadRequest("Amount must be an integer (VND)");
+            if (request.Items.Any(x => x.Quantity <= 0))
+                return BadRequest("Invalid quantity");
 
             var staffId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
-
-            var today = DateTime.UtcNow.Date;
-            var dayLocked = await _db.DailyRevenues.AnyAsync(x => x.Date == today);
-            if (dayLocked)
-                return BadRequest("Day already closed");
 
             var shift = await _db.Shifts.FirstOrDefaultAsync(x =>
                 x.UserId == staffId &&
@@ -310,9 +319,9 @@ namespace API.Controllers
                 PickupTime = null,
                 IsUrgent = true,
 
-                SubTotal = request.TotalPrice,
+                SubTotal = 0,
                 DiscountAmount = 0,
-                TotalPrice = request.TotalPrice,
+                TotalPrice = 0,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -331,6 +340,9 @@ namespace API.Controllers
                 if (!menuItems.TryGetValue(i.ItemId, out var item))
                     return BadRequest($"Item {i.ItemId} not found");
 
+                if (i.Quantity <= 0)
+                    return BadRequest("Invalid quantity");
+
                 _db.OrderItems.Add(new OrderItem
                 {
                     Id = Guid.NewGuid(),
@@ -341,8 +353,21 @@ namespace API.Controllers
                 });
             }
 
+            // Compute totals (VAT 8%)
+            const decimal vatRate = 0.08m;
+            var subTotal = request.Items.Sum(x => menuItems[x.ItemId].Price * x.Quantity);
+            var discount = 0m;
+            var baseAmount = subTotal - discount;
+            if (baseAmount < 0) baseAmount = 0;
+            var vatAmount = decimal.Round(baseAmount * vatRate, 0, MidpointRounding.AwayFromZero);
+            var total = decimal.Round(baseAmount + vatAmount, 0, MidpointRounding.AwayFromZero);
+
+            order.SubTotal = subTotal;
+            order.DiscountAmount = discount;
+            order.TotalPrice = total;
+
             // Update shift totals immediately for cash
-            shift.SystemCashTotal += request.TotalPrice;
+            shift.SystemCashTotal += order.TotalPrice;
 
             try
             {
@@ -386,6 +411,10 @@ namespace API.Controllers
         [HttpPost("{orderId:guid}/cash")]
         public async Task<IActionResult> PayExistingOrderByCash(Guid orderId)
         {
+            var gate = await _dayGate.EnsurePosOperationsAllowedAsync();
+            if (!gate.allowed)
+                return BadRequest(gate.reason);
+
             var staffId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);
@@ -446,6 +475,10 @@ namespace API.Controllers
         [HttpPost("{orderId:guid}/cancel")]
         public async Task<IActionResult> CancelExistingOrder(Guid orderId)
         {
+            var gate = await _dayGate.EnsurePosOperationsAllowedAsync();
+            if (!gate.allowed)
+                return BadRequest(gate.reason);
+
             var staffId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
             var order = await _db.Orders.FirstOrDefaultAsync(o => o.Id == orderId);

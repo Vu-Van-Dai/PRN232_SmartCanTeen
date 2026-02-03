@@ -19,6 +19,8 @@ namespace Core.Entities
         public int InventoryQuantity { get; set; }
         public string? ImageUrl { get; set; }
 
+        public ICollection<MenuItemImage> Images { get; set; } = new List<MenuItemImage>();
+
         public bool IsActive { get; set; } = true;
         public bool IsDeleted { get; set; } = false;
     }

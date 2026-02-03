@@ -1,6 +1,7 @@
 using API.Hubs;
 using API.Seed;
 using API.Services;
+using API.Services.Email;
 using Application.JWTToken;
 using Application.Orders;
 using Application.Payments;
@@ -11,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using static System.Net.WebRequestMethods;
+using PdfSharpCore.Fonts;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +49,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.Configure<PayosOptions>(builder.Configuration.GetSection("PayOS"));
+
+// Email (SendGrid)
+builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("SendGrid"));
+builder.Services.AddScoped<IEmailSender, SendGridEmailSender>();
+
+// Business day (05:00 local) rules for POS + reports
+builder.Services.Configure<BusinessDayOptions>(builder.Configuration.GetSection("BusinessDay"));
+builder.Services.AddSingleton<BusinessDayClock>();
+builder.Services.AddScoped<BusinessDayGate>();
+
 builder.Services.AddHttpClient<PayosService>();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<PayosPaymentProcessor>();
@@ -61,6 +73,12 @@ builder.Services.AddSignalR();
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// PDF font resolver (for Vietnamese text in generated PDFs)
+if (GlobalFontSettings.FontResolver == null)
+{
+    GlobalFontSettings.FontResolver = new PdfFontResolver();
+}
 
 builder.Services.AddAuthentication("Bearer")
     .AddJwtBearer("Bearer", options =>
