@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Linq;
 
 namespace API.Controllers
 {
@@ -47,9 +48,28 @@ namespace API.Controllers
                 return Problem("Cloudinary is not configured", statusCode: 500);
 
             // Force folder to a safe namespace; allow optional subfolder.
-            var folder = string.IsNullOrWhiteSpace(request?.Folder)
+            var rawFolder = string.IsNullOrWhiteSpace(request?.Folder)
                 ? "smartcanteen/avatars"
                 : request.Folder.Trim();
+
+            // Prevent escaping the namespace (e.g. "../")
+            var folder = rawFolder.Replace("\\", "/");
+            if (!folder.StartsWith("smartcanteen/", StringComparison.OrdinalIgnoreCase))
+            {
+                folder = "smartcanteen/avatars";
+            }
+
+            // Role-gate sensitive upload folders.
+            var isManager = User.Claims
+                .Where(c => c.Type == ClaimTypes.Role)
+                .Any(c => string.Equals(c.Value, "Manager", StringComparison.OrdinalIgnoreCase));
+
+            var isMenuOrCategory =
+                folder.StartsWith("smartcanteen/menu-items", StringComparison.OrdinalIgnoreCase) ||
+                folder.StartsWith("smartcanteen/categories", StringComparison.OrdinalIgnoreCase);
+
+            if (isMenuOrCategory && !isManager)
+                return Forbid();
 
             var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 

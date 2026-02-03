@@ -29,18 +29,78 @@ public class OrderSchedulerService
 
             var now = DateTime.UtcNow;
 
+            const int autoStartMinutes = 10;
+
             var orders = await db.Orders
                 .Where(x =>
                     x.Status == OrderStatus.SystemHolding &&
                     x.PickupTime != null &&
-                    x.PickupTime.Value.AddMinutes(-15) <= now
+                    x.PickupTime.Value.AddMinutes(-autoStartMinutes) <= now
                 )
                 .ToListAsync();
 
             foreach (var order in orders)
             {
                 order.Status = OrderStatus.Preparing;
-                order.IsUrgent = true;
+
+                // Pre-orders are not urgent; urgent is reserved for immediate orders (PickupTime == null).
+                order.IsUrgent = order.PickupTime == null;
+
+                // Keep station tasks consistent so boards & student progress update immediately.
+                var orderCategoryIds = await db.OrderItems
+                    .AsNoTracking()
+                    .Where(oi => oi.OrderId == order.Id)
+                    .Select(oi => oi.Item.CategoryId)
+                    .Distinct()
+                    .ToListAsync();
+
+                if (orderCategoryIds.Count == 0)
+                    continue;
+
+                var screenIds = await db.DisplayScreenCategories
+                    .AsNoTracking()
+                    .Where(sc => orderCategoryIds.Contains(sc.CategoryId))
+                    .Select(sc => sc.ScreenId)
+                    .Distinct()
+                    .ToListAsync();
+
+                if (screenIds.Count == 0)
+                    continue;
+
+                var existingTasks = await db.OrderStationTasks
+                    .Where(t => t.OrderId == order.Id)
+                    .ToListAsync();
+
+                foreach (var task in existingTasks)
+                {
+                    if (task.Status == StationTaskStatus.Pending)
+                    {
+                        task.Status = StationTaskStatus.Preparing;
+                        task.StartedAt ??= now;
+                    }
+                }
+
+                var existingScreenIds = existingTasks.Select(t => t.ScreenId).ToHashSet();
+                var missingScreenIds = screenIds.Where(id => !existingScreenIds.Contains(id)).ToList();
+                if (missingScreenIds.Count == 0)
+                    continue;
+
+                var activeScreens = await db.DisplayScreens
+                    .AsNoTracking()
+                    .Where(s => missingScreenIds.Contains(s.Id) && s.IsActive)
+                    .Select(s => s.Id)
+                    .ToListAsync();
+
+                foreach (var screenId in activeScreens)
+                {
+                    db.OrderStationTasks.Add(new OrderStationTask
+                    {
+                        OrderId = order.Id,
+                        ScreenId = screenId,
+                        Status = StationTaskStatus.Preparing,
+                        StartedAt = now,
+                    });
+                }
             }
 
             await db.SaveChangesAsync();

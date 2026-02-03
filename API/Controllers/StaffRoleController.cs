@@ -26,7 +26,7 @@ namespace API.Controllers
             Guid userId,
             [FromQuery] string roleName)
         {
-            if (roleName != "Kitchen" && roleName != "StaffPos")
+            if (roleName != "StaffKitchen" && roleName != "StaffPOS" && roleName != "StaffCoordination" && roleName != "StaffDrink")
                 return BadRequest("Invalid staff role");
 
             var user = await _db.Users
@@ -72,7 +72,7 @@ namespace API.Controllers
             Guid userId,
             [FromQuery] string roleName)
         {
-            if (roleName != "Kitchen" && roleName != "StaffPos")
+            if (roleName != "StaffKitchen" && roleName != "StaffPOS" && roleName != "StaffCoordination" && roleName != "StaffDrink")
                 return BadRequest("Invalid staff role");
 
             var role = await _db.Roles

@@ -3,6 +3,7 @@ using System;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260202160125_AddPasswordResetOtpAndMustChangePassword")]
+    partial class AddPasswordResetOtpAndMustChangePassword
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -81,58 +84,6 @@ namespace Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("DailyRevenues");
-                });
-
-            modelBuilder.Entity("Core.Entities.DisplayScreen", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Key")
-                        .IsUnique()
-                        .HasFilter("\"IsDeleted\" = false");
-
-                    b.ToTable("DisplayScreens");
-                });
-
-            modelBuilder.Entity("Core.Entities.DisplayScreenCategory", b =>
-                {
-                    b.Property<Guid>("ScreenId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("CategoryId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("ScreenId", "CategoryId");
-
-                    b.HasIndex("CategoryId");
-
-                    b.ToTable("DisplayScreenCategories");
                 });
 
             modelBuilder.Entity("Core.Entities.InventoryLog", b =>
@@ -313,33 +264,6 @@ namespace Infrastructure.Migrations
                     b.HasIndex("OrderId");
 
                     b.ToTable("OrderItems");
-                });
-
-            modelBuilder.Entity("Core.Entities.OrderStationTask", b =>
-                {
-                    b.Property<Guid>("OrderId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ScreenId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("ReadyAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("StartedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.HasKey("OrderId", "ScreenId");
-
-                    b.HasIndex("ScreenId", "Status");
-
-                    b.ToTable("OrderStationTasks");
                 });
 
             modelBuilder.Entity("Core.Entities.PasswordResetOtp", b =>
@@ -728,25 +652,6 @@ namespace Infrastructure.Migrations
                     b.Navigation("ClosedByUser");
                 });
 
-            modelBuilder.Entity("Core.Entities.DisplayScreenCategory", b =>
-                {
-                    b.HasOne("Core.Entities.Category", "Category")
-                        .WithMany()
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Core.Entities.DisplayScreen", "Screen")
-                        .WithMany("ScreenCategories")
-                        .HasForeignKey("ScreenId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Category");
-
-                    b.Navigation("Screen");
-                });
-
             modelBuilder.Entity("Core.Entities.InventoryLog", b =>
                 {
                     b.HasOne("Core.Entities.MenuItem", "Item")
@@ -830,25 +735,6 @@ namespace Infrastructure.Migrations
                     b.Navigation("Item");
 
                     b.Navigation("Order");
-                });
-
-            modelBuilder.Entity("Core.Entities.OrderStationTask", b =>
-                {
-                    b.HasOne("Core.Entities.Order", "Order")
-                        .WithMany()
-                        .HasForeignKey("OrderId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Core.Entities.DisplayScreen", "Screen")
-                        .WithMany()
-                        .HasForeignKey("ScreenId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Order");
-
-                    b.Navigation("Screen");
                 });
 
             modelBuilder.Entity("Core.Entities.PasswordResetOtp", b =>
@@ -975,11 +861,6 @@ namespace Infrastructure.Migrations
                     b.Navigation("User");
 
                     b.Navigation("Wallet");
-                });
-
-            modelBuilder.Entity("Core.Entities.DisplayScreen", b =>
-                {
-                    b.Navigation("ScreenCategories");
                 });
 
             modelBuilder.Entity("Core.Entities.MenuItem", b =>

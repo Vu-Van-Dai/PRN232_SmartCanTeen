@@ -46,6 +46,20 @@ namespace API.Controllers
                         quantity = i.Quantity,
                         unitPrice = i.UnitPrice
                     }),
+                    stationTasks = _db.OrderStationTasks
+                        .AsNoTracking()
+                        .Where(t => t.OrderId == o.Id)
+                        .OrderBy(t => t.Screen.Name)
+                        .Select(t => new
+                        {
+                            screenKey = t.Screen.Key,
+                            screenName = t.Screen.Name,
+                            status = (int)t.Status,
+                            startedAt = t.StartedAt,
+                            readyAt = t.ReadyAt,
+                            completedAt = t.CompletedAt,
+                        })
+                        .ToList(),
                     pickedAtCounter = (string?)null
                 })
                 .ToListAsync();

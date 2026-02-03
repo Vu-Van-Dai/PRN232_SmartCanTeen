@@ -43,6 +43,7 @@ public static class DbSeeder
             "StaffKitchen",
             "StaffPOS",
             "StaffCoordination",
+            "StaffDrink",
             "Student",
             "Parent"
         };
@@ -78,6 +79,7 @@ public static class DbSeeder
             new { Email = config["SeedTestUsers:KitchenEmail"] ?? "kitchen@smartcanteen.local", FullName = "Staff Kitchen", Roles = new[] { "Staff", "StaffKitchen" } },
             new { Email = config["SeedTestUsers:CoordinationeEmail"] ?? "coordination@smartcanteen.local", FullName = "Staff Coordination", Roles = new[] { "Staff", "StaffCoordination" } },
             new { Email = config["SeedTestUsers:PosEmail"] ?? "pos@smartcanteen.local", FullName = "Staff POS", Roles = new[] { "Staff", "StaffPOS" } },
+            new { Email = config["SeedTestUsers:DrinkEmail"] ?? "drink@smartcanteen.local", FullName = "Staff Drink", Roles = new[] { "Staff", "StaffDrink" } },
             new { Email = config["SeedTestUsers:StudentEmail"] ?? "student@smartcanteen.local", FullName = "Student", Roles = new[] { "Student" } },
             new { Email = config["SeedTestUsers:ParentEmail"] ?? "parent@smartcanteen.local", FullName = "Parent", Roles = new[] { "Parent" } },
         };
@@ -148,6 +150,43 @@ public static class DbSeeder
             }
 
             await db.SaveChangesAsync();
+
+            // =========================
+            // 3) SEED DEFAULT DISPLAY SCREENS (if migrated)
+            // =========================
+            try
+            {
+                var defaultScreens = new[]
+                {
+                    new { Key = "hot-kitchen", Name = "Bếp nóng" },
+                    new { Key = "drink", Name = "Quầy nước" },
+                };
+
+                foreach (var s in defaultScreens)
+                {
+                    var exists = await db.DisplayScreens.AnyAsync(x => x.Key == s.Key);
+                    if (!exists)
+                    {
+                        db.DisplayScreens.Add(new DisplayScreen
+                        {
+                            Id = Guid.NewGuid(),
+                            Key = s.Key,
+                            Name = s.Name,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow,
+                            IsDeleted = false,
+                        });
+                    }
+                }
+
+                await db.SaveChangesAsync();
+            }
+            catch (PostgresException ex) when (ex.SqlState == "42P01")
+            {
+                // Table doesn't exist yet (migration not applied). Safe to skip.
+                Console.WriteLine($"[DbSeeder] DisplayScreens seed skipped: {ex.SqlState} {ex.MessageText}");
+            }
         }
 
         // =========================

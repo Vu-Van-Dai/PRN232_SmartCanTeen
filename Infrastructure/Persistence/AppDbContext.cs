@@ -23,6 +23,7 @@ public class AppDbContext : DbContext
     public DbSet<DailyRevenue> DailyRevenues => Set<DailyRevenue>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<MenuItem> MenuItems => Set<MenuItem>();
+    public DbSet<MenuItemImage> MenuItemImages => Set<MenuItemImage>();
     public DbSet<InventoryLog> InventoryLogs => Set<InventoryLog>();
 
     public DbSet<Wallet> Wallets => Set<Wallet>();
@@ -33,6 +34,14 @@ public class AppDbContext : DbContext
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+
+    public DbSet<PasswordResetOtp> PasswordResetOtps => Set<PasswordResetOtp>();
+
+    public DbSet<Promotion> Promotions => Set<Promotion>();
+
+    public DbSet<DisplayScreen> DisplayScreens => Set<DisplayScreen>();
+    public DbSet<DisplayScreenCategory> DisplayScreenCategories => Set<DisplayScreenCategory>();
+    public DbSet<OrderStationTask> OrderStationTasks => Set<OrderStationTask>();
 
     // ========= Fluent API =========
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -51,6 +60,14 @@ public class AppDbContext : DbContext
             .HasQueryFilter(x =>
                 !x.IsDeleted
             );
+
+        modelBuilder.Entity<Promotion>()
+            .HasQueryFilter(x =>
+                !x.IsDeleted
+            );
+
+        modelBuilder.Entity<DisplayScreen>()
+            .HasQueryFilter(x => !x.IsDeleted);
 
         modelBuilder.Entity<DailyRevenue>(entity =>
         {
@@ -81,6 +98,24 @@ public class AppDbContext : DbContext
             entity.HasIndex(x => x.Email)
                   .IsUnique()
                   .HasFilter("\"IsDeleted\" = false"); // PostgreSQL partial index
+        });
+
+        // =========================
+        // PASSWORD RESET OTP
+        // =========================
+        modelBuilder.Entity<PasswordResetOtp>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.CodeHash)
+                .IsRequired();
+
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => new { x.UserId, x.ExpiresAt });
         });
 
         // =========================
@@ -144,6 +179,52 @@ public class AppDbContext : DbContext
         });
 
         // =========================
+        // DISPLAY SCREEN
+        // =========================
+        modelBuilder.Entity<DisplayScreen>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Key).IsRequired().HasMaxLength(100);
+            entity.Property(x => x.Name).IsRequired().HasMaxLength(200);
+            entity.HasIndex(x => x.Key).IsUnique().HasFilter("\"IsDeleted\" = false");
+        });
+
+        modelBuilder.Entity<DisplayScreenCategory>(entity =>
+        {
+            entity.HasKey(x => new { x.ScreenId, x.CategoryId });
+
+            entity.HasOne(x => x.Screen)
+                .WithMany(x => x.ScreenCategories)
+                .HasForeignKey(x => x.ScreenId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.Category)
+                .WithMany()
+                .HasForeignKey(x => x.CategoryId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // =========================
+        // ORDER STATION TASK
+        // =========================
+        modelBuilder.Entity<OrderStationTask>(entity =>
+        {
+            entity.HasKey(x => new { x.OrderId, x.ScreenId });
+
+            entity.HasOne(x => x.Order)
+                .WithMany()
+                .HasForeignKey(x => x.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.Screen)
+                .WithMany()
+                .HasForeignKey(x => x.ScreenId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => new { x.ScreenId, x.Status });
+        });
+
+        // =========================
         // MENU ITEM
         // =========================
         modelBuilder.Entity<MenuItem>(entity =>
@@ -157,6 +238,21 @@ public class AppDbContext : DbContext
             // NOTE: Do not map PostgreSQL system column xmin here.
             // Some dev DBs are created outside EF migrations and won't have a physical xmin column.
         });
+
+          modelBuilder.Entity<MenuItemImage>(entity =>
+          {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Url)
+                .IsRequired();
+
+            entity.HasOne(x => x.MenuItem)
+                .WithMany(x => x.Images)
+                .HasForeignKey(x => x.MenuItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => new { x.MenuItemId, x.SortOrder });
+          });
 
         // =========================
         // INVENTORY LOG
@@ -275,6 +371,29 @@ public class AppDbContext : DbContext
             entity.HasOne(x => x.PerformedByUser)
                   .WithMany()
                   .HasForeignKey(x => x.PerformedByUserId);
+        });
+
+        // =========================
+        // PROMOTION
+        // =========================
+        modelBuilder.Entity<Promotion>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Name)
+                .IsRequired()
+                .HasMaxLength(200);
+
+            entity.Property(x => x.Code)
+                .IsRequired()
+                .HasMaxLength(64);
+
+            entity.HasIndex(x => x.Code)
+                .IsUnique()
+                .HasFilter("\"IsDeleted\" = false");
+
+            entity.Property(x => x.ConfigJson)
+                .HasColumnType("jsonb");
         });
     }
     public override int SaveChanges()
