@@ -16,7 +16,7 @@ namespace API.Controllers
 {
     [ApiController]
     [Route("api/management/reports")]
-    [Authorize(Roles = "Manager")]
+    [Authorize(Roles = "Manager,AdminSystem")]
     public class ManagementReportsController : ControllerBase
     {
         private readonly AppDbContext _db;
@@ -519,7 +519,7 @@ namespace API.Controllers
         }
 
         [HttpPost("close-day")]
-        [Authorize(Roles = "Manager")]
+        [Authorize(Roles = "Manager,AdminSystem")]
         public async Task<IActionResult> CloseDay(DateTime date)
         {
             var dateLocal = DateOnly.FromDateTime(date);
@@ -597,7 +597,7 @@ namespace API.Controllers
             return Ok(shift);
         }
         [HttpGet("dashboard")]
-        [Authorize(Roles = "Manager")]
+        [Authorize(Roles = "Manager,AdminSystem")]
         public async Task<IActionResult> GetDashboardSnapshot()
         {
             var opDate = _clock.GetOperationalDate(_clock.LocalNow);

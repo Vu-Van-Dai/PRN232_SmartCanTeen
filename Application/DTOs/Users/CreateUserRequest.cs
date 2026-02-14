@@ -10,6 +10,7 @@ namespace Application.DTOs.Users
     {
         public string Email { get; set; } = default!;
         public string FullName { get; set; } = default!;
+        public string? StudentCode { get; set; }
         public string? Password { get; set; }
         public string Role { get; set; } = default!;
     }

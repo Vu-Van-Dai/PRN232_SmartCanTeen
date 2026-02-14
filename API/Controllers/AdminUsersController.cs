@@ -33,6 +33,7 @@ namespace API.Controllers
         {
             var email = (request.Email ?? string.Empty).Trim();
             var fullName = (request.FullName ?? string.Empty).Trim();
+            var studentCode = (request.StudentCode ?? string.Empty).Trim();
 
             if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(fullName))
                 return BadRequest("Missing fields");
@@ -59,6 +60,21 @@ namespace API.Controllers
             if (string.IsNullOrWhiteSpace(requestedRole) || disallowed.Contains(requestedRole) || !allowedMain.Contains(requestedRole))
                 return BadRequest("Invalid role");
 
+            // StudentCode is required for Student accounts
+            if (string.Equals(requestedRole, "Student", StringComparison.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(studentCode))
+                    return BadRequest("Missing studentCode");
+
+                var studentCodeLower = studentCode.ToLower();
+
+                var codeExists = await _db.Users
+                    .AnyAsync(x => x.StudentCode != null && x.StudentCode.ToLower() == studentCodeLower);
+
+                if (codeExists)
+                    return BadRequest("StudentCode already exists");
+            }
+
             // 1️⃣ Validate role
             var role = await _db.Roles
                 .FirstOrDefaultAsync(x => x.Name == requestedRole);
@@ -83,6 +99,7 @@ namespace API.Controllers
                 Id = Guid.NewGuid(),
                 Email = email,
                 FullName = fullName,
+                StudentCode = string.IsNullOrWhiteSpace(studentCode) ? null : studentCode,
                 PasswordHash = PasswordHasher.Hash(oneTimePassword!),
                 MustChangePassword = true,
                 IsActive = true,
