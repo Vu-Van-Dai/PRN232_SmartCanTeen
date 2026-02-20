@@ -9,6 +9,11 @@ namespace Application.DTOs
     public class CreateOfflineOrderRequest
     {
         public decimal TotalPrice { get; set; }
+
+        // POS receipt info (optional).
+        public decimal? AmountReceived { get; set; }
+        public decimal? ChangeAmount { get; set; }
+
         public List<CreateOfflineOrderItem> Items { get; set; } = new();
     }
 
