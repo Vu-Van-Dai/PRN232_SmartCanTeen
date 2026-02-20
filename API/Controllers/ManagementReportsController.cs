@@ -169,6 +169,8 @@ namespace API.Controllers
                     source = o.OrderSource == OrderSource.Online
                         ? "Online"
                         : (o.PaymentMethod == PaymentMethod.Cash ? "Cash" : "QR"),
+                    amountReceived = o.AmountReceived,
+                    changeAmount = o.ChangeAmount,
                     subTotal = o.Items.Sum(i => i.UnitPrice * i.Quantity),
                     discountAmount = o.DiscountAmount,
                     vatRate = 0.08m,

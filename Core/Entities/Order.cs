@@ -27,6 +27,12 @@ namespace Core.Entities
 
         public OrderStatus Status { get; set; }
 
+        // ===== POS RECEIPT =====
+        // Amount customer paid/tendered at POS (Cash/QR). For QR it typically equals TotalPrice.
+        public decimal? AmountReceived { get; set; }
+        // Change to return to customer (typically max(0, AmountReceived - TotalPrice)).
+        public decimal? ChangeAmount { get; set; }
+
         // ===== PRICE =====
         public decimal SubTotal { get; set; }
         public decimal DiscountAmount { get; set; }

@@ -7,6 +7,7 @@ using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -141,6 +142,10 @@ namespace API.Controllers
             order.SubTotal = subTotal;
             order.DiscountAmount = discount;
             order.TotalPrice = total;
+
+            // QR: customer pays exact amount; no change.
+            order.AmountReceived = order.TotalPrice;
+            order.ChangeAmount = 0;
 
             // 4️⃣ TẠO PAYOS PAYMENT LINK (store mapping in existing table)
             var orderCode = _payos.GenerateOrderCode();
@@ -366,6 +371,29 @@ namespace API.Controllers
             order.DiscountAmount = discount;
             order.TotalPrice = total;
 
+            // Cash: store tendered + change for receipt.
+            if (request.AmountReceived != null)
+            {
+                if (request.AmountReceived < order.TotalPrice)
+                    return BadRequest("AmountReceived must be >= total");
+
+                order.AmountReceived = request.AmountReceived;
+                order.ChangeAmount = request.ChangeAmount ?? (request.AmountReceived - order.TotalPrice);
+            }
+            else if (request.ChangeAmount != null)
+            {
+                if (request.ChangeAmount < 0)
+                    return BadRequest("ChangeAmount must be >= 0");
+
+                order.ChangeAmount = request.ChangeAmount;
+                order.AmountReceived = order.TotalPrice + request.ChangeAmount;
+            }
+            else
+            {
+                order.AmountReceived = order.TotalPrice;
+                order.ChangeAmount = 0;
+            }
+
             // Update shift totals immediately for cash
             shift.SystemCashTotal += order.TotalPrice;
 
@@ -409,7 +437,9 @@ namespace API.Controllers
         /// Tránh tạo order mới khi khách hủy QR và đổi sang tiền mặt.
         /// </summary>
         [HttpPost("{orderId:guid}/cash")]
-        public async Task<IActionResult> PayExistingOrderByCash(Guid orderId)
+        public async Task<IActionResult> PayExistingOrderByCash(
+            Guid orderId,
+            [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] PayPosOrderByCashRequest? request)
         {
             var gate = await _dayGate.EnsurePosOperationsAllowedAsync();
             if (!gate.allowed)
@@ -444,6 +474,27 @@ namespace API.Controllers
                 order.PaymentMethod = PaymentMethod.Cash;
                 order.Status = OrderStatus.Preparing;
                 order.IsUrgent = true;
+
+                if (request?.AmountReceived != null)
+                {
+                    if (request.AmountReceived < order.TotalPrice)
+                        return BadRequest("AmountReceived must be >= total");
+
+                    order.AmountReceived = request.AmountReceived;
+                    order.ChangeAmount = request.ChangeAmount ?? (request.AmountReceived - order.TotalPrice);
+                }
+                else if (request?.ChangeAmount != null)
+                {
+                    if (request.ChangeAmount < 0)
+                        return BadRequest("ChangeAmount must be >= 0");
+
+                    order.ChangeAmount = request.ChangeAmount;
+                    order.AmountReceived = order.TotalPrice + request.ChangeAmount;
+                }
+
+                // Store receipt fields if missing (fallback values).
+                order.AmountReceived ??= order.TotalPrice;
+                order.ChangeAmount ??= 0;
 
                 shift.SystemCashTotal += order.TotalPrice;
 

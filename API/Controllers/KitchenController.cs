@@ -675,93 +675,62 @@ namespace API.Controllers
             var order = await _db.Orders.FirstOrDefaultAsync(x => x.Id == orderId);
             if (order == null) return BadRequest("Invalid order");
 
-            // If stationKey is provided, complete only that station task.
-            if (!string.IsNullOrWhiteSpace(stationKey))
+            // Station-level completion only. This represents "delivered to student" for that station.
+            if (string.IsNullOrWhiteSpace(stationKey))
             {
-                var key = stationKey.Trim();
-                var screen = await _db.DisplayScreens.FirstOrDefaultAsync(s => s.Key == key && s.IsActive);
-                if (screen == null) return BadRequest("Invalid stationKey");
-
-                if (!isManager)
-                {
-                    if (string.Equals(key, "drink", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (!roles.Contains("StaffDrink")) return Forbid();
-                    }
-                    else
-                    {
-                        if (!isCoordination) return Forbid();
-                    }
-                }
-
-                var task = await _db.OrderStationTasks
-                    .FirstOrDefaultAsync(t => t.OrderId == orderId && t.ScreenId == screen.Id);
-
-                if (task == null) return BadRequest("Task not found");
-                if (task.Status != StationTaskStatus.Ready) return BadRequest("Invalid task state");
-
-                task.Status = StationTaskStatus.Completed;
-                task.CompletedAt = DateTime.UtcNow;
-
-                var allCompleted = await _db.OrderStationTasks
-                    .Where(t => t.OrderId == orderId)
-                    .AllAsync(t => t.Status == StationTaskStatus.Completed);
-
-                if (allCompleted)
-                {
-                    order.Status = OrderStatus.Completed;
-                }
-
-                await _db.SaveChangesAsync();
-
-                if (allCompleted)
-                {
-                    var notifyEnabled = await _db.Users
-                        .AsNoTracking()
-                        .Where(u => u.Id == order.OrderedByUserId)
-                        .Select(u => u.OrderReadyNotificationsEnabled)
-                        .FirstOrDefaultAsync();
-
-                    if (notifyEnabled)
-                    {
-                        await _orderHub.Clients
-                            .User(order.OrderedByUserId.ToString())
-                            .SendAsync("OrderCompleted", new { orderId = order.Id });
-                    }
-                }
-
-                return Ok();
+                return BadRequest("stationKey is required");
             }
 
-            // No stationKey => coordination completes whole order after it's Ready.
-            if (!isManager && !isCoordination) return Forbid();
-            if (order.Status != OrderStatus.Ready) return BadRequest("Invalid order");
+            var key = stationKey.Trim();
+            var screen = await _db.DisplayScreens.FirstOrDefaultAsync(s => s.Key == key && s.IsActive);
+            if (screen == null) return BadRequest("Invalid stationKey");
 
-            // Mark all tasks completed (if any exist)
-            var tasks = await _db.OrderStationTasks.Where(t => t.OrderId == orderId).ToListAsync();
-            foreach (var t in tasks)
+            if (!isManager)
             {
-                if (t.Status != StationTaskStatus.Completed)
+                if (string.Equals(key, "drink", StringComparison.OrdinalIgnoreCase))
                 {
-                    t.Status = StationTaskStatus.Completed;
-                    t.CompletedAt = DateTime.UtcNow;
+                    if (!roles.Contains("StaffDrink")) return Forbid();
+                }
+                else
+                {
+                    if (!isCoordination) return Forbid();
                 }
             }
 
-            order.Status = OrderStatus.Completed;
+            var task = await _db.OrderStationTasks
+                .FirstOrDefaultAsync(t => t.OrderId == orderId && t.ScreenId == screen.Id);
+
+            if (task == null) return BadRequest("Task not found");
+            if (task.Status != StationTaskStatus.Ready) return BadRequest("Invalid task state");
+
+            task.Status = StationTaskStatus.Completed;
+            task.CompletedAt = DateTime.UtcNow;
+
             await _db.SaveChangesAsync();
 
-            var notify = await _db.Users
-                .AsNoTracking()
-                .Where(u => u.Id == order.OrderedByUserId)
-                .Select(u => u.OrderReadyNotificationsEnabled)
-                .FirstOrDefaultAsync();
+            await EnsureTasksForOrderByCategoryAsync(orderId);
+            await RecomputeOrderStatusAsync(orderId);
 
-            if (notify)
+            var isOrderCompleted = await _db.Orders
+                .AsNoTracking()
+                .Where(o => o.Id == orderId)
+                .Select(o => o.Status)
+                .FirstOrDefaultAsync() == OrderStatus.Completed;
+
+            if (isOrderCompleted)
             {
-                await _orderHub.Clients
-                    .User(order.OrderedByUserId.ToString())
-                    .SendAsync("OrderCompleted", new { orderId = order.Id });
+                var notifyEnabled = await _db.Users
+                    .AsNoTracking()
+                    .Where(u => u.Id == order.OrderedByUserId)
+                    .Select(u => u.OrderReadyNotificationsEnabled)
+                    .FirstOrDefaultAsync();
+
+                if (notifyEnabled)
+                {
+                    await _orderHub.Clients
+                        .User(order.OrderedByUserId.ToString())
+                        .SendAsync("OrderCompleted", new { orderId = order.Id });
+                }
             }
 
             return Ok();
