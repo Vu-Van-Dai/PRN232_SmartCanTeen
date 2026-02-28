@@ -1,6 +1,7 @@
 ﻿using API.Hubs;
 using Application.DTOs.MenuItems;
 using Core.Entities;
+using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -45,6 +46,7 @@ namespace API.Controllers
                     CategoryName = x.Category.Name,
                     Name = x.Name,
                     Price = x.Price,
+                    ProductType = x.ProductType.ToString(),
                     InventoryQuantity = x.InventoryQuantity,
                     ImageUrls = x.Images
                         .OrderBy(i => i.SortOrder)
@@ -104,6 +106,7 @@ namespace API.Controllers
                 CategoryId = request.CategoryId,
                 Name = request.Name,
                 Price = request.Price,
+                ProductType = request.ProductType,
                 InventoryQuantity = request.InventoryQuantity,
                 ImageUrl = urls.FirstOrDefault(),
                 IsActive = request.IsActive,
@@ -137,6 +140,7 @@ namespace API.Controllers
                 categoryId = item.CategoryId,
                 name = item.Name,
                 price = item.Price,
+                productType = item.ProductType.ToString(),
                 inventoryQuantity = item.InventoryQuantity,
                 imageUrl = item.ImageUrl,
                 imageUrls = urls,
@@ -180,6 +184,7 @@ namespace API.Controllers
 
             item.Name = request.Name;
             item.Price = request.Price;
+            item.ProductType = request.ProductType;
             item.InventoryQuantity = request.InventoryQuantity;
             item.ImageUrl = urls.FirstOrDefault();
             item.IsActive = request.IsActive;
@@ -213,6 +218,7 @@ namespace API.Controllers
                 id = item.Id,
                 name = item.Name,
                 price = item.Price,
+                productType = item.ProductType.ToString(),
                 inventoryQuantity = item.InventoryQuantity,
                 imageUrl = item.ImageUrl,
                 imageUrls = urls,

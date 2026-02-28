@@ -10,6 +10,9 @@
 *.userosscache
 *.sln.docstates
 
+# Local app settings (keep secrets out of git)
+API/appsettings.Development.local.json
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 

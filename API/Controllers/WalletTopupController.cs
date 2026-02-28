@@ -67,6 +67,7 @@ namespace API.Controllers
                 PaymentRef = payRef,
                 WalletId = walletId,
                 Amount = amount,
+                PaymentMethod = PaymentMethod.Qr,
                 Purpose = PaymentPurpose.WalletTopup,
                 IsSuccess = false,
                 CreatedAt = DateTime.UtcNow

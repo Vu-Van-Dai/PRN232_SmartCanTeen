@@ -70,7 +70,7 @@ namespace API.Controllers
             if (request.Items.Any(x => x.Quantity <= 0))
                 return BadRequest("Invalid quantity");
 
-            decimal subTotal = 0;
+            decimal grossTotal = 0;
             const decimal vatRate = 0.08m;
             const decimal discount = 0m;
 
@@ -103,7 +103,7 @@ namespace API.Controllers
                 if (i.Quantity <= 0)
                     return BadRequest("Invalid quantity");
 
-                subTotal += item.Price * i.Quantity;
+                grossTotal += item.Price * i.Quantity;
 
                 _db.OrderItems.Add(new OrderItem
                 {
@@ -111,16 +111,22 @@ namespace API.Controllers
                     OrderId = order.Id,
                     ItemId = item.Id,
                     Quantity = i.Quantity,
+                    CancelledQuantity = 0,
+                    Status = item.ProductType == ProductType.ReadyMade ? OrderItemStatus.Completed : OrderItemStatus.Pending,
                     UnitPrice = item.Price
                 });
             }
 
-            var baseAmount = subTotal - discount;
-            if (baseAmount < 0) baseAmount = 0;
-            var vatAmount = decimal.Round(baseAmount * vatRate, 0, MidpointRounding.AwayFromZero);
-            var total = decimal.Round(baseAmount + vatAmount, 0, MidpointRounding.AwayFromZero);
+            var total = decimal.Round(grossTotal - discount, 0, MidpointRounding.AwayFromZero);
+            if (total < 0) total = 0;
 
-            order.SubTotal = subTotal;
+            var vatAmount = decimal.Round(total * (vatRate / (1m + vatRate)), 0, MidpointRounding.AwayFromZero);
+            if (vatAmount < 0) vatAmount = 0;
+            if (vatAmount > total) vatAmount = total;
+
+            var baseAmount = total - vatAmount;
+
+            order.SubTotal = baseAmount;
             order.DiscountAmount = discount;
             order.TotalPrice = total;
 

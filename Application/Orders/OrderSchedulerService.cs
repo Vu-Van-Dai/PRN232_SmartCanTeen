@@ -49,7 +49,11 @@ public class OrderSchedulerService
                 // Keep station tasks consistent so boards & student progress update immediately.
                 var orderCategoryIds = await db.OrderItems
                     .AsNoTracking()
-                    .Where(oi => oi.OrderId == order.Id)
+                    .Where(oi =>
+                        oi.OrderId == order.Id &&
+                        oi.Item.ProductType == ProductType.Prepared &&
+                        oi.Status != OrderItemStatus.Cancelled &&
+                        oi.Quantity > oi.CancelledQuantity)
                     .Select(oi => oi.Item.CategoryId)
                     .Distinct()
                     .ToListAsync();

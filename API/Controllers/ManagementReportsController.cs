@@ -45,9 +45,10 @@ namespace API.Controllers
                 OrderStatus.Preparing,
                 OrderStatus.Ready,
                 OrderStatus.Completed,
+                OrderStatus.Refunded,
             };
 
-            var shifts = await _db.Shifts
+            var rawShifts = await _db.Shifts
                 // Include any shift that overlaps the operational window.
                 .Where(x =>
                     x.OpenedAt < toUtc &&
@@ -69,6 +70,72 @@ namespace API.Controllers
                     x.StaffQrInput
                 })
                 .ToListAsync();
+
+            var allowedPurposes = new[]
+            {
+                PaymentPurpose.OfflineOrder,
+                PaymentPurpose.OfflineOrderRefund,
+                PaymentPurpose.OnlineOrder
+            };
+
+            var shiftIds = rawShifts.Select(s => s.Id).ToList();
+            var txnByShift = await _db.PaymentTransactions
+                .AsNoTracking()
+                .Where(t =>
+                    t.IsSuccess &&
+                    t.ShiftId != null &&
+                    shiftIds.Contains(t.ShiftId.Value) &&
+                    allowedPurposes.Contains(t.Purpose))
+                .GroupBy(t => new { shiftId = t.ShiftId!.Value, t.PaymentMethod })
+                .Select(g => new { g.Key.shiftId, g.Key.PaymentMethod, amount = g.Sum(x => x.Amount) })
+                .ToListAsync();
+
+            var shiftTotals = txnByShift
+                .GroupBy(x => x.shiftId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.ToDictionary(x => x.PaymentMethod, x => x.amount));
+
+            var shifts = rawShifts.Select(s =>
+            {
+                if (shiftTotals.TryGetValue(s.Id, out var totals))
+                {
+                    totals.TryGetValue(PaymentMethod.Cash, out var cash);
+                    totals.TryGetValue(PaymentMethod.Qr, out var qr);
+                    totals.TryGetValue(PaymentMethod.Wallet, out var online);
+
+                    return new
+                    {
+                        s.Id,
+                        s.UserId,
+                        s.status,
+                        s.openedByName,
+                        s.OpenedAt,
+                        s.ClosedAt,
+                        SystemCashTotal = cash,
+                        SystemQrTotal = qr,
+                        SystemOnlineTotal = online,
+                        s.StaffCashInput,
+                        s.StaffQrInput
+                    };
+                }
+
+                // Fallback for legacy data (no PaymentTransactions for that shift)
+                return new
+                {
+                    s.Id,
+                    s.UserId,
+                    s.status,
+                    s.openedByName,
+                    s.OpenedAt,
+                    s.ClosedAt,
+                    s.SystemCashTotal,
+                    s.SystemQrTotal,
+                    s.SystemOnlineTotal,
+                    s.StaffCashInput,
+                    s.StaffQrInput
+                };
+            }).ToList();
 
             var totalOrders = await _db.Orders
                 .Where(o =>
@@ -133,11 +200,63 @@ namespace API.Controllers
 
             var staffName = shift.User.FullName ?? shift.User.Email;
 
+            var allowedPurposes = new[]
+            {
+                PaymentPurpose.OfflineOrder,
+                PaymentPurpose.OfflineOrderRefund,
+                PaymentPurpose.OnlineOrder
+            };
+
+            var txns = await _db.PaymentTransactions
+                .AsNoTracking()
+                .Where(t => t.IsSuccess && t.ShiftId == shiftId && allowedPurposes.Contains(t.Purpose))
+                .ToListAsync();
+
+            static Guid? TryParseRefundReceiptId(string paymentRef)
+            {
+                const string prefix = "REFUND-";
+                if (string.IsNullOrWhiteSpace(paymentRef))
+                    return null;
+                if (!paymentRef.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    return null;
+                var raw = paymentRef.Substring(prefix.Length);
+                return Guid.TryParse(raw, out var id) ? id : null;
+            }
+
+            var refundReceipts = await _db.RefundReceipts
+                .AsNoTracking()
+                .Where(r => r.ShiftId == shiftId)
+                .Include(r => r.PerformedByUser)
+                .Include(r => r.Items)
+                    .ThenInclude(i => i.OrderItem)
+                        .ThenInclude(oi => oi.Item)
+                .OrderByDescending(r => r.CreatedAt)
+                .ToListAsync();
+
+            var refundMap = refundReceipts.ToDictionary(r => r.Id, r => r);
+
+            decimal cashPos = shift.SystemCashTotal;
+            decimal qrPos = shift.SystemQrTotal;
+            decimal online = shift.SystemOnlineTotal;
+
+            if (txns.Count > 0)
+            {
+                cashPos = txns.Where(t => t.PaymentMethod == PaymentMethod.Cash).Sum(t => t.Amount);
+                qrPos = txns.Where(t => t.PaymentMethod == PaymentMethod.Qr).Sum(t => t.Amount);
+                online = txns.Where(t => t.PaymentMethod == PaymentMethod.Wallet).Sum(t => t.Amount);
+            }
+
             var orderCount = orders.Count;
-            var totalItemsSold = orders
-                .Where(o => o.Status != OrderStatus.Cancelled)
+            var grossItemsSold = orders
+                .Where(o => o.Status != OrderStatus.Cancelled && o.Status != OrderStatus.Pending)
                 .SelectMany(o => o.Items)
                 .Sum(i => i.Quantity);
+
+            var refundedItemsCount = refundReceipts
+                .SelectMany(r => r.Items)
+                .Sum(i => i.Quantity);
+
+            var totalItemsSold = Math.Max(0, grossItemsSold - refundedItemsCount);
 
             var response = new
             {
@@ -150,10 +269,10 @@ namespace API.Controllers
 
                 revenue = new
                 {
-                    cashPos = shift.SystemCashTotal,
-                    qrPos = shift.SystemQrTotal,
-                    online = shift.SystemOnlineTotal,
-                    total = shift.SystemCashTotal + shift.SystemQrTotal + shift.SystemOnlineTotal
+                    cashPos,
+                    qrPos,
+                    online,
+                    total = cashPos + qrPos + online
                 },
 
                 stats = new
@@ -161,6 +280,54 @@ namespace API.Controllers
                     totalOrders = orderCount,
                     totalItemsSold
                 },
+
+                transactions = txns
+                    .OrderByDescending(t => t.CreatedAt)
+                    .Select(t =>
+                    {
+                        Guid? refundReceiptId = null;
+                        object? refundReceipt = null;
+
+                        if (t.Purpose == PaymentPurpose.OfflineOrderRefund)
+                        {
+                            refundReceiptId = TryParseRefundReceiptId(t.PaymentRef);
+                            if (refundReceiptId != null && refundMap.TryGetValue(refundReceiptId.Value, out var rr))
+                            {
+                                var staff = rr.PerformedByUser.FullName ?? rr.PerformedByUser.Email;
+                                refundReceipt = new
+                                {
+                                    refundReceiptId = rr.Id,
+                                    originalOrderId = rr.OriginalOrderId,
+                                    createdAt = rr.CreatedAt,
+                                    refundAmount = rr.RefundAmount,
+                                    amountReturned = rr.AmountReturned,
+                                    refundMethod = rr.RefundMethod.ToString(),
+                                    performedBy = new { id = rr.PerformedByUserId, name = staff },
+                                    reason = rr.Reason,
+                                    items = rr.Items.Select(i => new
+                                    {
+                                        orderItemId = i.OrderItemId,
+                                        name = i.OrderItem.Item.Name,
+                                        quantity = i.Quantity,
+                                        unitPrice = i.UnitPrice,
+                                        lineTotal = i.UnitPrice * i.Quantity
+                                    })
+                                };
+                            }
+                        }
+
+                        return new
+                        {
+                            transactionId = t.Id,
+                            createdAt = t.CreatedAt,
+                            amount = t.Amount,
+                            paymentMethod = t.PaymentMethod.ToString(),
+                            purpose = t.Purpose.ToString(),
+                            orderId = t.OrderId,
+                            refundReceiptId,
+                            refundReceipt
+                        };
+                    }),
 
                 orders = orders.Select(o => new
                 {
@@ -171,13 +338,13 @@ namespace API.Controllers
                         : (o.PaymentMethod == PaymentMethod.Cash ? "Cash" : "QR"),
                     amountReceived = o.AmountReceived,
                     changeAmount = o.ChangeAmount,
-                    subTotal = o.Items.Sum(i => i.UnitPrice * i.Quantity),
+                    subTotal = Math.Max(
+                        0m,
+                        o.TotalPrice - decimal.Round(o.TotalPrice * (0.08m / (1m + 0.08m)), 0, MidpointRounding.AwayFromZero)
+                    ),
                     discountAmount = o.DiscountAmount,
                     vatRate = 0.08m,
-                    vatAmount = Math.Max(
-                        0m,
-                        o.TotalPrice - ((o.Items.Sum(i => i.UnitPrice * i.Quantity)) - o.DiscountAmount)
-                    ),
+                    vatAmount = decimal.Round(o.TotalPrice * (0.08m / (1m + 0.08m)), 0, MidpointRounding.AwayFromZero),
                     totalPrice = o.TotalPrice,
                     status = o.Status.ToString(),
                     createdBy = o.OrderSource == OrderSource.Online
@@ -256,18 +423,31 @@ namespace API.Controllers
                 .ThenBy(x => x.name)
                 .ToListAsync();
 
+            // Prices are VAT-inclusive; derive VAT portion from total.
             // Placeholder discount for future promo-code logic
-            var itemsWithMoney = items.Select(x => new
+            var itemsWithMoney = items.Select(x =>
             {
-                x.itemId,
-                x.name,
-                x.imageUrl,
-                x.quantity,
-                grossAmount = x.grossAmount,
-                discountAmount = 0m,
-                vatRate,
-                vatAmount = (x.grossAmount - 0m) * vatRate,
-                totalAmount = (x.grossAmount - 0m) * (1m + vatRate)
+                var totalAmount = decimal.Round(x.grossAmount, 0, MidpointRounding.AwayFromZero);
+                if (totalAmount < 0) totalAmount = 0;
+
+                var vatAmount = decimal.Round(totalAmount * (vatRate / (1m + vatRate)), 0, MidpointRounding.AwayFromZero);
+                if (vatAmount < 0) vatAmount = 0;
+                if (vatAmount > totalAmount) vatAmount = totalAmount;
+
+                var grossAmount = totalAmount - vatAmount;
+
+                return new
+                {
+                    x.itemId,
+                    x.name,
+                    x.imageUrl,
+                    x.quantity,
+                    grossAmount,
+                    discountAmount = 0m,
+                    vatRate,
+                    vatAmount,
+                    totalAmount
+                };
             }).ToList();
 
             var totals = new
@@ -335,16 +515,29 @@ namespace API.Controllers
                 return s;
             }
 
+            // Prices are VAT-inclusive; derive VAT portion from total.
             // Placeholder discount for future promo-code logic
-            var rows = items.Select(x => new
+            var rows = items.Select(x =>
             {
-                x.itemId,
-                x.name,
-                x.quantity,
-                grossAmount = x.grossAmount,
-                discountAmount = 0m,
-                vatAmount = (x.grossAmount - 0m) * vatRate,
-                totalAmount = (x.grossAmount - 0m) * (1m + vatRate)
+                var totalAmount = decimal.Round(x.grossAmount, 0, MidpointRounding.AwayFromZero);
+                if (totalAmount < 0) totalAmount = 0;
+
+                var vatAmount = decimal.Round(totalAmount * (vatRate / (1m + vatRate)), 0, MidpointRounding.AwayFromZero);
+                if (vatAmount < 0) vatAmount = 0;
+                if (vatAmount > totalAmount) vatAmount = totalAmount;
+
+                var grossAmount = totalAmount - vatAmount;
+
+                return new
+                {
+                    x.itemId,
+                    x.name,
+                    x.quantity,
+                    grossAmount,
+                    discountAmount = 0m,
+                    vatAmount,
+                    totalAmount
+                };
             }).ToList();
 
             var totalItems = rows.Sum(x => x.quantity);
@@ -405,15 +598,28 @@ namespace API.Controllers
                 .ThenBy(x => x.name)
                 .ToListAsync();
 
-            var rows = items.Select(x => new
+            // Prices are VAT-inclusive; derive VAT portion from total.
+            var rows = items.Select(x =>
             {
-                x.itemId,
-                x.name,
-                x.quantity,
-                grossAmount = x.grossAmount,
-                discountAmount = 0m,
-                vatAmount = (x.grossAmount - 0m) * vatRate,
-                totalAmount = (x.grossAmount - 0m) * (1m + vatRate)
+                var totalAmount = decimal.Round(x.grossAmount, 0, MidpointRounding.AwayFromZero);
+                if (totalAmount < 0) totalAmount = 0;
+
+                var vatAmount = decimal.Round(totalAmount * (vatRate / (1m + vatRate)), 0, MidpointRounding.AwayFromZero);
+                if (vatAmount < 0) vatAmount = 0;
+                if (vatAmount > totalAmount) vatAmount = totalAmount;
+
+                var grossAmount = totalAmount - vatAmount;
+
+                return new
+                {
+                    x.itemId,
+                    x.name,
+                    x.quantity,
+                    grossAmount,
+                    discountAmount = 0m,
+                    vatAmount,
+                    totalAmount
+                };
             }).ToList();
 
             var totalItems = rows.Sum(x => x.quantity);
@@ -558,14 +764,40 @@ namespace API.Controllers
             {
                 Id = Guid.NewGuid(),
                 Date = dayKeyUtc,
-
-                TotalCash = shifts.Sum(x => x.SystemCashTotal),
-                TotalQr = shifts.Sum(x => x.SystemQrTotal),
-                TotalOnline = shifts.Sum(x => x.SystemOnlineTotal),
-
+                TotalCash = 0,
+                TotalQr = 0,
+                TotalOnline = 0,
                 ClosedByUserId = managerId,
                 ClosedAt = DateTime.UtcNow
             };
+
+            // Prefer PaymentTransactions for net revenue (payments positive, refunds negative).
+            var allowedPurposes = new[]
+            {
+                PaymentPurpose.OfflineOrder,
+                PaymentPurpose.OfflineOrderRefund,
+                PaymentPurpose.OnlineOrder
+            };
+
+            var shiftIds = shifts.Select(s => s.Id).ToList();
+            var txns = await _db.PaymentTransactions
+                .AsNoTracking()
+                .Where(t => t.IsSuccess && t.ShiftId != null && shiftIds.Contains(t.ShiftId.Value) && allowedPurposes.Contains(t.Purpose))
+                .ToListAsync();
+
+            if (txns.Count > 0)
+            {
+                daily.TotalCash = txns.Where(t => t.PaymentMethod == PaymentMethod.Cash).Sum(t => t.Amount);
+                daily.TotalQr = txns.Where(t => t.PaymentMethod == PaymentMethod.Qr).Sum(t => t.Amount);
+                daily.TotalOnline = txns.Where(t => t.PaymentMethod == PaymentMethod.Wallet).Sum(t => t.Amount);
+            }
+            else
+            {
+                // Fallback for legacy data
+                daily.TotalCash = shifts.Sum(x => x.SystemCashTotal);
+                daily.TotalQr = shifts.Sum(x => x.SystemQrTotal);
+                daily.TotalOnline = shifts.Sum(x => x.SystemOnlineTotal);
+            }
             
             _db.DailyRevenues.Add(daily);
             await _db.SaveChangesAsync();

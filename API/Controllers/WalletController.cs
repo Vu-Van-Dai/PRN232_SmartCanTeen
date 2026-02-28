@@ -60,8 +60,11 @@ namespace API.Controllers
                 PerformedByUserId = userId,
                 PaymentRef = payRef,
                 Amount = amount,
+                PaymentMethod = PaymentMethod.Qr,
                 Purpose = PaymentPurpose.WalletTopup,
-                WalletId = wallet.Id
+                WalletId = wallet.Id,
+                IsSuccess = false,
+                CreatedAt = DateTime.UtcNow
             });
 
             await _db.SaveChangesAsync();
