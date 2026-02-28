@@ -22,6 +22,7 @@ namespace Core.Enums
         Preparing = 4,      // Đang nấu
         Ready = 5,
         Cancelled = 6,
-        Completed = 7
+        Completed = 7,
+        Refunded = 8
     }
 }

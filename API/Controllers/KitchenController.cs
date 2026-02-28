@@ -32,7 +32,11 @@ namespace API.Controllers
             // Find categories in this order
             var orderCategoryIds = await _db.OrderItems
                 .AsNoTracking()
-                .Where(oi => oi.OrderId == orderId)
+                .Where(oi =>
+                    oi.OrderId == orderId &&
+                    oi.Item.ProductType == ProductType.Prepared &&
+                    oi.Status != OrderItemStatus.Cancelled &&
+                    oi.Quantity > oi.CancelledQuantity)
                 .Select(oi => oi.Item.CategoryId)
                 .Distinct()
                 .ToListAsync();
@@ -198,7 +202,13 @@ namespace API.Controllers
                 var candidateOrderIds = await _db.Orders
                     .AsNoTracking()
                     .Where(o => relevantStatuses.Contains(o.Status))
-                    .Where(o => allowedCategoryIds == null || o.Items.Any(i => allowedCategoryIds.Contains(i.Item.CategoryId)))
+                    .Where(o =>
+                        allowedCategoryIds == null
+                        || o.Items.Any(i =>
+                            i.Item.ProductType == ProductType.Prepared
+                            && allowedCategoryIds.Contains(i.Item.CategoryId)
+                            && i.Status != OrderItemStatus.Cancelled
+                            && i.Quantity > i.CancelledQuantity))
                     .Select(o => o.Id)
                     .ToListAsync();
 
@@ -305,7 +315,13 @@ namespace API.Controllers
                 .Include(x => x.OrderedByUser)
                 .Include(x => x.Items)
                     .ThenInclude(i => i.Item)
-                .Where(x => allowedCategoryIds == null || x.Items.Any(i => allowedCategoryIds.Contains(i.Item.CategoryId)))
+                .Where(x =>
+                    allowedCategoryIds == null
+                    || x.Items.Any(i =>
+                        i.Item.ProductType == ProductType.Prepared
+                        && allowedCategoryIds.Contains(i.Item.CategoryId)
+                        && i.Status != OrderItemStatus.Cancelled
+                        && i.Quantity > i.CancelledQuantity))
                 .Where(x =>
                     screenId == null ||
                     _db.OrderStationTasks.Any(t => t.OrderId == x.Id && t.ScreenId == screenId && t.Status == StationTaskStatus.Pending))
@@ -344,12 +360,16 @@ namespace API.Controllers
                     totalPrice = x.TotalPrice,
                     orderedBy = x.OrderedByUser.FullName ?? x.OrderedByUser.Email,
                     items = x.Items
-                        .Where(i => allowedCategoryIds == null || allowedCategoryIds.Contains(i.Item.CategoryId))
+                        .Where(i =>
+                            i.Item.ProductType == ProductType.Prepared
+                            && i.Status != OrderItemStatus.Cancelled
+                            && i.Quantity > i.CancelledQuantity
+                            && (allowedCategoryIds == null || allowedCategoryIds.Contains(i.Item.CategoryId)))
                         .Select(i => new
                     {
                         itemId = i.ItemId,
                         name = i.Item.Name,
-                        quantity = i.Quantity,
+                        quantity = i.Quantity - i.CancelledQuantity,
                         unitPrice = i.UnitPrice,
                     })
                 })
@@ -361,7 +381,13 @@ namespace API.Controllers
                 .Include(x => x.OrderedByUser)
                 .Include(x => x.Items)
                     .ThenInclude(i => i.Item)
-                .Where(x => allowedCategoryIds == null || x.Items.Any(i => allowedCategoryIds.Contains(i.Item.CategoryId)))
+                .Where(x =>
+                    allowedCategoryIds == null
+                    || x.Items.Any(i =>
+                        i.Item.ProductType == ProductType.Prepared
+                        && allowedCategoryIds.Contains(i.Item.CategoryId)
+                        && i.Status != OrderItemStatus.Cancelled
+                        && i.Quantity > i.CancelledQuantity))
                 .Where(x =>
                     screenId == null ||
                     _db.OrderStationTasks.Any(t => t.OrderId == x.Id && t.ScreenId == screenId && t.Status == StationTaskStatus.Preparing))
@@ -400,12 +426,16 @@ namespace API.Controllers
                     totalPrice = x.TotalPrice,
                     orderedBy = x.OrderedByUser.FullName ?? x.OrderedByUser.Email,
                     items = x.Items
-                        .Where(i => allowedCategoryIds == null || allowedCategoryIds.Contains(i.Item.CategoryId))
+                        .Where(i =>
+                            i.Item.ProductType == ProductType.Prepared
+                            && i.Status != OrderItemStatus.Cancelled
+                            && i.Quantity > i.CancelledQuantity
+                            && (allowedCategoryIds == null || allowedCategoryIds.Contains(i.Item.CategoryId)))
                         .Select(i => new
                     {
                         itemId = i.ItemId,
                         name = i.Item.Name,
-                        quantity = i.Quantity,
+                        quantity = i.Quantity - i.CancelledQuantity,
                         unitPrice = i.UnitPrice,
                     })
                 })
@@ -417,7 +447,13 @@ namespace API.Controllers
                 .Include(x => x.OrderedByUser)
                 .Include(x => x.Items)
                     .ThenInclude(i => i.Item)
-                .Where(x => allowedCategoryIds == null || x.Items.Any(i => allowedCategoryIds.Contains(i.Item.CategoryId)))
+                .Where(x =>
+                    allowedCategoryIds == null
+                    || x.Items.Any(i =>
+                        i.Item.ProductType == ProductType.Prepared
+                        && allowedCategoryIds.Contains(i.Item.CategoryId)
+                        && i.Status != OrderItemStatus.Cancelled
+                        && i.Quantity > i.CancelledQuantity))
                 .Where(x =>
                     screenId == null ||
                     _db.OrderStationTasks.Any(t => t.OrderId == x.Id && t.ScreenId == screenId && t.Status == StationTaskStatus.Ready))
@@ -456,12 +492,16 @@ namespace API.Controllers
                     totalPrice = x.TotalPrice,
                     orderedBy = x.OrderedByUser.FullName ?? x.OrderedByUser.Email,
                     items = x.Items
-                        .Where(i => allowedCategoryIds == null || allowedCategoryIds.Contains(i.Item.CategoryId))
+                        .Where(i =>
+                            i.Item.ProductType == ProductType.Prepared
+                            && i.Status != OrderItemStatus.Cancelled
+                            && i.Quantity > i.CancelledQuantity
+                            && (allowedCategoryIds == null || allowedCategoryIds.Contains(i.Item.CategoryId)))
                         .Select(i => new
                     {
                         itemId = i.ItemId,
                         name = i.Item.Name,
-                        quantity = i.Quantity,
+                        quantity = i.Quantity - i.CancelledQuantity,
                         unitPrice = i.UnitPrice,
                     })
                 })

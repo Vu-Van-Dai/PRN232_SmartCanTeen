@@ -13,6 +13,8 @@ namespace Core.Entities
 
         public decimal Amount { get; set; }
 
+        public PaymentMethod PaymentMethod { get; set; }
+
         public PaymentPurpose Purpose { get; set; }
 
         public Guid? WalletId { get; set; }

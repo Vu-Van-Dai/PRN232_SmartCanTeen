@@ -34,6 +34,8 @@ public class AppDbContext : DbContext
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<Transaction> Transactions => Set<Transaction>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
+    public DbSet<RefundReceipt> RefundReceipts => Set<RefundReceipt>();
+    public DbSet<RefundReceiptItem> RefundReceiptItems => Set<RefundReceiptItem>();
 
     public DbSet<PasswordResetOtp> PasswordResetOtps => Set<PasswordResetOtp>();
 
@@ -79,6 +81,47 @@ public class AppDbContext : DbContext
             entity.HasOne(x => x.ClosedByUser)
                   .WithMany()
                   .HasForeignKey(x => x.ClosedByUserId);
+        });
+
+        modelBuilder.Entity<RefundReceipt>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.HasOne(x => x.OriginalOrder)
+                .WithMany()
+                .HasForeignKey(x => x.OriginalOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.Shift)
+                .WithMany()
+                .HasForeignKey(x => x.ShiftId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.PerformedByUser)
+                .WithMany()
+                .HasForeignKey(x => x.PerformedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.OriginalOrderId);
+            entity.HasIndex(x => x.ShiftId);
+        });
+
+        modelBuilder.Entity<RefundReceiptItem>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.HasOne(x => x.RefundReceipt)
+                .WithMany(x => x.Items)
+                .HasForeignKey(x => x.RefundReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(x => x.OrderItem)
+                .WithMany()
+                .HasForeignKey(x => x.OrderItemId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => x.RefundReceiptId);
+            entity.HasIndex(x => x.OrderItemId);
         });
 
         // =========================
@@ -235,6 +278,9 @@ public class AppDbContext : DbContext
                   .WithMany()
                   .HasForeignKey(x => x.CategoryId);
 
+            entity.Property(x => x.ProductType)
+                .HasDefaultValue(ProductType.Prepared);
+
             // NOTE: Do not map PostgreSQL system column xmin here.
             // Some dev DBs are created outside EF migrations and won't have a physical xmin column.
         });
@@ -349,6 +395,12 @@ public class AppDbContext : DbContext
             entity.HasOne(x => x.Item)
                   .WithMany()
                   .HasForeignKey(x => x.ItemId);
+
+            entity.Property(x => x.Status)
+                .HasDefaultValue(OrderItemStatus.Pending);
+
+            entity.Property(x => x.CancelledQuantity)
+                .HasDefaultValue(0);
         });
 
         // =========================

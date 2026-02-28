@@ -54,6 +54,7 @@ namespace API.Services
                 {
                     order = await _db.Orders
                         .Include(o => o.Items)
+                            .ThenInclude(i => i.Item)
                         .FirstOrDefaultAsync(o => o.Id == txn.OrderId, ct);
 
                     if (order == null || order.Status != OrderStatus.Pending)
@@ -63,9 +64,13 @@ namespace API.Services
                     if (shift == null || shift.Status != ShiftStatus.Open)
                         throw new InvalidOperationException("Invalid shift");
 
-                    // Offline orders paid at POS go straight to preparing
-                    order.Status = OrderStatus.Preparing;
-                    order.IsUrgent = true;
+                    var hasPreparedItems = order.Items.Any(oi => oi.Item.ProductType == ProductType.Prepared
+                        && oi.Status != OrderItemStatus.Cancelled
+                        && oi.Quantity > oi.CancelledQuantity);
+
+                    // Offline orders paid at POS go straight to kitchen ONLY if there are Prepared items.
+                    order.Status = hasPreparedItems ? OrderStatus.Preparing : OrderStatus.Completed;
+                    order.IsUrgent = hasPreparedItems;
 
                     shift.SystemQrTotal += txn.Amount;
 

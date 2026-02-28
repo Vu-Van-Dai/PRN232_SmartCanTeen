@@ -9,6 +9,8 @@ namespace Core.Enums
     public enum PaymentPurpose
     {
         WalletTopup = 1,
-        OfflineOrder = 2
+        OfflineOrder = 2,
+        OfflineOrderRefund = 3,
+        OnlineOrder = 4
     }
 }

@@ -28,7 +28,11 @@ namespace API.Controllers
             // Find categories in this order
             var orderCategoryIds = await _db.OrderItems
                 .AsNoTracking()
-                .Where(oi => oi.OrderId == orderId)
+                .Where(oi =>
+                    oi.OrderId == orderId &&
+                    oi.Item.ProductType == ProductType.Prepared &&
+                    oi.Status != OrderItemStatus.Cancelled &&
+                    oi.Quantity > oi.CancelledQuantity)
                 .Select(oi => oi.Item.CategoryId)
                 .Distinct()
                 .ToListAsync();
@@ -115,6 +119,7 @@ namespace API.Controllers
 
             var order = await _db.Orders
                 .Include(x => x.Items)
+                    .ThenInclude(i => i.Item)
                 .FirstOrDefaultAsync(x =>
                     x.Id == orderId &&
                     x.OrderSource == OrderSource.Online &&
@@ -155,10 +160,15 @@ namespace API.Controllers
             // 3️⃣ UPDATE ORDER
             if (order.OrderSource == OrderSource.Online)
             {
+                var hasPreparedItems = order.Items.Any(oi => oi.Item.ProductType == ProductType.Prepared
+                    && oi.Status != OrderItemStatus.Cancelled
+                    && oi.Quantity > oi.CancelledQuantity);
+
                 if (order.PickupTime == null)
                 {
-                    order.Status = OrderStatus.Preparing;
-                    order.IsUrgent = true;
+                    // Immediate orders go to kitchen only when there are Prepared items.
+                    order.Status = hasPreparedItems ? OrderStatus.Preparing : OrderStatus.Completed;
+                    order.IsUrgent = hasPreparedItems;
                 }
                 else
                 {
@@ -169,11 +179,35 @@ namespace API.Controllers
             order.PaymentMethod = PaymentMethod.Wallet;
 
             // 3.2️⃣ ENSURE STATION TASKS (so KDS & Student progress work immediately)
-            await EnsureStationTasksForOrderAsync(order.Id, order.Status);
+            if (order.Status == OrderStatus.Preparing || order.Status == OrderStatus.SystemHolding)
+            {
+                var hasPreparedItems = order.Items.Any(oi => oi.Item.ProductType == ProductType.Prepared
+                    && oi.Status != OrderItemStatus.Cancelled
+                    && oi.Quantity > oi.CancelledQuantity);
+
+                if (hasPreparedItems)
+                    await EnsureStationTasksForOrderAsync(order.Id, order.Status);
+            }
 
             // 3.5️⃣ LINK SHIFT + SYSTEM ONLINE TOTAL
             order.ShiftId = shift.Id;
             shift.SystemOnlineTotal += order.TotalPrice;
+
+            // Payment transaction for revenue ledger
+            _db.PaymentTransactions.Add(new PaymentTransaction
+            {
+                Id = Guid.NewGuid(),
+                PerformedByUserId = userId,
+                PaymentRef = $"WALLET-ORDER-{order.Id}",
+                Amount = order.TotalPrice,
+                PaymentMethod = PaymentMethod.Wallet,
+                Purpose = PaymentPurpose.OnlineOrder,
+                OrderId = order.Id,
+                ShiftId = shift.Id,
+                WalletId = wallet.Id,
+                IsSuccess = true,
+                CreatedAt = DateTime.UtcNow
+            });
 
             // 4️⃣ TRỪ KHO + INVENTORY LOG
             foreach (var item in order.Items)

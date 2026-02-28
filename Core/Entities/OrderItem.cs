@@ -1,4 +1,5 @@
 ﻿using Core.Common;
+using Core.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,6 +17,12 @@ namespace Core.Entities
         public MenuItem Item { get; set; } = default!;
 
         public int Quantity { get; set; }
+
+        // Quantity already refunded/cancelled for this line (for KDS + audit).
+        public int CancelledQuantity { get; set; } = 0;
+
+        // ReadyMade items are completed immediately; Prepared items start pending.
+        public OrderItemStatus Status { get; set; } = OrderItemStatus.Pending;
 
         // Snapshot price tại thời điểm mua
         public decimal UnitPrice { get; set; }

@@ -14,6 +14,7 @@ namespace Application.DTOs.MenuItems
 
         public string Name { get; set; } = default!;
         public decimal Price { get; set; }
+        public string ProductType { get; set; } = Core.Enums.ProductType.Prepared.ToString();
         public int InventoryQuantity { get; set; }
         public List<string>? ImageUrls { get; set; }
         public string? ImageUrl { get; set; }
