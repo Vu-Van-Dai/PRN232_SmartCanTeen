@@ -25,10 +25,15 @@ builder.Services.AddCors(options =>
             ?? new[]
             {
                 "http://localhost:8080",
-                "http://localhost:5173",
                 "https://localhost:8080",
+                "http://localhost:5173",
+                "http://localhost:8081",
+                "https://localhost:8081",
                 "https://localhost:5173",
-                "https://smart-canteensystem.vercel.app"
+                "https://smart-canteensystem.vercel.app",
+                "https://www.smartcanteen.io.vn",
+                "www.smartcanteen.io.vn",
+                "https://smartcanteen.io.vn"
             };
 
         policy
