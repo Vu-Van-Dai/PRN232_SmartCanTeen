@@ -1,4 +1,5 @@
 ﻿using API.Hubs;
+using API.Services;
 using Application.DTOs.MenuItems;
 using Core.Entities;
 using Core.Enums;
@@ -20,11 +21,55 @@ namespace API.Controllers
     {
         private readonly AppDbContext _db;
         private readonly IHubContext<ManagementHub> _hub;
+        private readonly BusinessDayClock _clock;
 
-        public MenuItemsController(AppDbContext db, IHubContext<ManagementHub> hub)
+        public MenuItemsController(AppDbContext db, IHubContext<ManagementHub> hub, BusinessDayClock clock)
         {
             _db = db;
             _hub = hub;
+            _clock = clock;
+        }
+
+        // =========================
+        // GET TOP SELLING (STUDENT)
+        // =========================
+        // Top-selling items for all time
+        // Query params:
+        // - take: number of items (default 4)
+        [HttpGet("top-selling")]
+        public async Task<IActionResult> GetTopSelling([FromQuery] int take = 4)
+        {
+            if (take <= 0) take = 4;
+            if (take > 50) take = 50;
+
+            var allowedStatuses = new[]
+            {
+                OrderStatus.Paid,
+                OrderStatus.Preparing,
+                OrderStatus.Ready,
+                OrderStatus.Completed,
+            };
+
+            var items = await _db.OrderItems
+                .Where(oi =>
+                    allowedStatuses.Contains(oi.Order.Status) &&
+                    !oi.Item.IsDeleted &&
+                    oi.Item.IsActive)
+                .GroupBy(oi => new { oi.ItemId, oi.Item.Name, oi.Item.Price, oi.Item.ImageUrl })
+                .Select(g => new
+                {
+                    id = g.Key.ItemId,
+                    name = g.Key.Name,
+                    price = g.Key.Price,
+                    imageUrl = g.Key.ImageUrl,
+                    quantity = g.Sum(x => x.Quantity)
+                })
+                .OrderByDescending(x => x.quantity)
+                .ThenBy(x => x.name)
+                .Take(take)
+                .ToListAsync();
+
+            return Ok(items);
         }
 
         // =========================
