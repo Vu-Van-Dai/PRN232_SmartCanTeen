@@ -13,6 +13,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using static System.Net.WebRequestMethods;
 using PdfSharpCore.Fonts;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -75,7 +76,14 @@ builder.Services.AddMemoryCache();
 
 builder.Services.AddSignalR();
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Allow enum values like "Prepared"/"ReadyMade" (string) in requests.
+        // Keeps FE and BE DTOs aligned without sending numeric enum values.
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
