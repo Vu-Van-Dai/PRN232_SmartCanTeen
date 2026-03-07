@@ -25,12 +25,6 @@ builder.Services.AddCors(options =>
         var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
             ?? new[]
             {
-                "http://localhost:8080",
-                "https://localhost:8080",
-                "http://localhost:5173",
-                "http://localhost:8081",
-                "https://localhost:8081",
-                "https://localhost:5173",
                 "https://smart-canteensystem.vercel.app",
                 "https://www.smartcanteen.io.vn",
                 "www.smartcanteen.io.vn",
