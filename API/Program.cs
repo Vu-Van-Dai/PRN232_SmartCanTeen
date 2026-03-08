@@ -54,6 +54,10 @@ builder.Services.Configure<PayosOptions>(builder.Configuration.GetSection("PayOS
 builder.Services.Configure<SendGridOptions>(builder.Configuration.GetSection("SendGrid"));
 builder.Services.AddScoped<IEmailSender, SendGridEmailSender>();
 
+// FCM (Web Push)
+builder.Services.Configure<FcmOptions>(builder.Configuration.GetSection("Firebase"));
+builder.Services.AddSingleton<IFcmPushService, FcmPushService>();
+
 // Business day (05:00 local) rules for POS + reports
 builder.Services.Configure<BusinessDayOptions>(builder.Configuration.GetSection("BusinessDay"));
 builder.Services.AddSingleton<BusinessDayClock>();

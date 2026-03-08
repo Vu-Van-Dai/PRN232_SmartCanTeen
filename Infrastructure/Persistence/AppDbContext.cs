@@ -45,6 +45,8 @@ public class AppDbContext : DbContext
     public DbSet<DisplayScreenCategory> DisplayScreenCategories => Set<DisplayScreenCategory>();
     public DbSet<OrderStationTask> OrderStationTasks => Set<OrderStationTask>();
 
+    public DbSet<UserFcmToken> UserFcmTokens => Set<UserFcmToken>();
+
     // ========= Fluent API =========
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -181,6 +183,28 @@ public class AppDbContext : DbContext
             entity.HasOne(x => x.Role)
                   .WithMany()
                   .HasForeignKey(x => x.RoleId);
+        });
+
+        // =========================
+        // USER FCM TOKENS (Web Push)
+        // =========================
+        modelBuilder.Entity<UserFcmToken>(entity =>
+        {
+            entity.HasKey(x => x.Id);
+
+            entity.Property(x => x.Token)
+                .IsRequired()
+                .HasMaxLength(2048);
+
+            entity.HasOne(x => x.User)
+                .WithMany()
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(x => new { x.UserId, x.Token })
+                .IsUnique();
+
+            entity.HasIndex(x => new { x.UserId, x.IsActive });
         });
 
         // =========================

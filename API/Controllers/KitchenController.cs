@@ -1,4 +1,5 @@
 ﻿using API.Hubs;
+using API.Services;
 using Core.Enums;
 using Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authorization;
@@ -18,13 +19,19 @@ namespace API.Controllers
     {
         private readonly AppDbContext _db;
         private readonly IHubContext<OrderHub> _orderHub;
+        private readonly IFcmPushService _fcm;
+        private readonly ILogger<KitchenController> _logger;
 
         public KitchenController(
             AppDbContext db,
-            IHubContext<OrderHub> orderHub)
+            IHubContext<OrderHub> orderHub,
+            IFcmPushService fcm,
+            ILogger<KitchenController> logger)
         {
             _db = db;
             _orderHub = orderHub;
+            _fcm = fcm;
+            _logger = logger;
         }
 
         private async Task EnsureTasksForOrderByCategoryAsync(Guid orderId)
@@ -695,6 +702,20 @@ namespace API.Controllers
                             orderId = order.Id,
                             pickupTime = order.PickupTime
                         });
+
+                    var tokens = await _db.UserFcmTokens
+                        .AsNoTracking()
+                        .Where(t => t.UserId == order.OrderedByUserId && t.IsActive)
+                        .Select(t => t.Token)
+                        .ToListAsync();
+
+                    _logger.LogWarning(
+                        "[FCM] OrderReady orderId={OrderId} userId={UserId} tokenCount={TokenCount}",
+                        order.Id,
+                        order.OrderedByUserId,
+                        tokens.Count);
+
+                    await _fcm.SendOrderReadyAsync(tokens, order.Id, order.PickupTime);
                 }
             }
 
