@@ -219,6 +219,20 @@ namespace API.Controllers
             if (duplicate)
                 return BadRequest("Menu item name already exists");
 
+            // Update category if provided
+            if (request.CategoryId.HasValue && request.CategoryId.Value != item.CategoryId)
+            {
+                var categoryExists = await _db.Categories.AnyAsync(x =>
+                    x.Id == request.CategoryId.Value &&
+                    !x.IsDeleted
+                );
+
+                if (!categoryExists)
+                    return BadRequest("Category not found");
+
+                item.CategoryId = request.CategoryId.Value;
+            }
+
             var urls = (request.ImageUrls ?? new List<string>())
                 .Where(u => !string.IsNullOrWhiteSpace(u))
                 .Select(u => u.Trim())
@@ -261,6 +275,7 @@ namespace API.Controllers
             .SendAsync("MenuItemUpdated", new
             {
                 id = item.Id,
+                categoryId = item.CategoryId,
                 name = item.Name,
                 price = item.Price,
                 productType = item.ProductType.ToString(),

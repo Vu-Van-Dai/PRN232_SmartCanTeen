@@ -8,6 +8,8 @@ namespace Application.DTOs.MenuItems
 {
     public class UpdateMenuItemRequest
     {
+        // Optional for backward compatibility; if provided, will update the item's category.
+        public Guid? CategoryId { get; set; }
         public string Name { get; set; } = default!;
         public decimal Price { get; set; }
         public Core.Enums.ProductType ProductType { get; set; } = Core.Enums.ProductType.Prepared;
