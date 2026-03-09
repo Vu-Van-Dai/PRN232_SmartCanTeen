@@ -2,6 +2,7 @@
 using Application.DTOs.Users;
 using Application.JWTToken;
 using API.Services.Email;
+using API.Services;
 using Core.Entities;
 using Core.Enums;
 using Infrastructure.Persistence;
@@ -19,12 +20,14 @@ namespace API.Controllers
         private readonly AppDbContext _db;
         private readonly JwtTokenService _jwt;
         private readonly IEmailSender _email;
+        private readonly FirebaseIdTokenVerifier _firebaseTokenVerifier;
 
-        public AuthController(AppDbContext db, JwtTokenService jwt, IEmailSender email)
+        public AuthController(AppDbContext db, JwtTokenService jwt, IEmailSender email, FirebaseIdTokenVerifier firebaseTokenVerifier)
         {
             _db = db;
             _jwt = jwt;
             _email = email;
+            _firebaseTokenVerifier = firebaseTokenVerifier;
         }
 
         [HttpPost("login")]
@@ -57,6 +60,62 @@ namespace API.Controllers
             {
                 AccessToken = token,
                 ExpiredAt = expiredAt
+            });
+        }
+
+        [HttpPost("google")]
+        [AllowAnonymous]
+        public async Task<IActionResult> GoogleLogin(GoogleLoginRequest request, CancellationToken cancellationToken)
+        {
+            var firebaseToken = (request.FirebaseIdToken ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(firebaseToken))
+                return BadRequest("Missing token");
+
+            var decoded = await _firebaseTokenVerifier.VerifyAsync(firebaseToken, cancellationToken);
+            if (decoded == null)
+                return Unauthorized("Invalid Google token");
+
+            if (!decoded.Claims.TryGetValue("email", out var emailObj))
+                return Unauthorized("Invalid Google token");
+
+            var email = (emailObj?.ToString() ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(email))
+                return Unauthorized("Invalid Google token");
+
+            // Optional but recommended: ensure email is verified when claim exists.
+            if (decoded.Claims.TryGetValue("email_verified", out var verifiedObj))
+            {
+                if (verifiedObj is bool b && !b)
+                    return Unauthorized("Email is not verified");
+            }
+
+            var emailLower = email.ToLower();
+            var user = await _db.Users
+                .Include(x => x.UserRoles)
+                .ThenInclude(x => x.Role)
+                .FirstOrDefaultAsync(x => x.Email.ToLower() == emailLower, cancellationToken);
+
+            // Important: do NOT auto-create; account must be provisioned by admin.
+            if (user == null)
+                return Unauthorized("Account not found");
+
+            if (!user.IsActive)
+                return Unauthorized("Account is locked");
+
+            var roles = user.UserRoles.Select(r => r.Role.Name);
+
+            var token = _jwt.GenerateToken(
+                userId: user.Id,
+                roles: roles,
+                email: user.Email,
+                name: user.FullName ?? user.Email,
+                mustChangePassword: user.MustChangePassword
+            );
+
+            return Ok(new LoginResponse
+            {
+                AccessToken = token,
+                ExpiredAt = DateTime.UtcNow.AddMinutes(_jwt.GetExpireMinutes())
             });
         }
 
