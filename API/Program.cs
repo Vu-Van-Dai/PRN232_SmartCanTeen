@@ -56,6 +56,7 @@ builder.Services.AddScoped<IEmailSender, SendGridEmailSender>();
 // FCM (Web Push)
 builder.Services.Configure<FcmOptions>(builder.Configuration.GetSection("Firebase"));
 builder.Services.AddSingleton<IFcmPushService, FcmPushService>();
+builder.Services.AddSingleton<FirebaseIdTokenVerifier>();
 
 // Business day (05:00 local) rules for POS + reports
 builder.Services.Configure<BusinessDayOptions>(builder.Configuration.GetSection("BusinessDay"));

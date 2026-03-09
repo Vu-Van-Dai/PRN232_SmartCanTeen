@@ -11,7 +11,6 @@ namespace API.Services
         private readonly FcmOptions _options;
         private readonly IHostEnvironment _env;
         private FirebaseApp? _app;
-        private static readonly object _initLock = new();
         private static bool _initialized;
 
         public FcmPushService(
@@ -98,7 +97,7 @@ namespace API.Services
                 }
             }
 
-            lock (_initLock)
+            lock (FirebaseAdminInitLock.Lock)
             {
                 if (_initialized) return true;
 
