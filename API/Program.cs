@@ -1,5 +1,4 @@
 using API.Hubs;
-using API.Seed;
 using API.Services;
 using API.Services.Email;
 using Application.JWTToken;
@@ -147,7 +146,5 @@ app.MapHub<ManagementHub>("/hubs/management");
 app.MapHub<KitchenHub>("/hubs/kitchen");
 
 app.MapControllers();
-
-await DbSeeder.SeedAsync(app.Services, app.Configuration);
 
 app.Run();

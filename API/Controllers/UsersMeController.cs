@@ -82,38 +82,24 @@ namespace API.Controllers
             if (string.IsNullOrWhiteSpace(token))
                 return BadRequest("token is required");
 
-            var existing = await _db.UserFcmTokens
-                .FirstOrDefaultAsync(x => x.UserId == userId && x.Token == token);
+            _logger.LogInformation(
+                "RegisterFcmToken: upsert token for user {UserId}, tokenPrefix={TokenPrefix}",
+                userId,
+                token.Length > 12 ? token[..12] : token);
 
-            if (existing == null)
-            {
-                _logger.LogInformation(
-                    "RegisterFcmToken: add token for user {UserId}, tokenPrefix={TokenPrefix}",
-                    userId,
-                    token.Length > 12 ? token[..12] : token);
+            var now = DateTime.UtcNow;
+            var id = Guid.NewGuid();
 
-                _db.UserFcmTokens.Add(new UserFcmToken
-                {
-                    Id = Guid.NewGuid(),
-                    UserId = userId,
-                    Token = token,
-                    CreatedAt = DateTime.UtcNow,
-                    LastSeenAt = DateTime.UtcNow,
-                    IsActive = true,
-                });
-            }
-            else
-            {
-                _logger.LogInformation(
-                    "RegisterFcmToken: refresh token for user {UserId}, tokenPrefix={TokenPrefix}",
-                    userId,
-                    token.Length > 12 ? token[..12] : token);
+            // Race-safe idempotent write: avoids duplicate key on (UserId, Token)
+            await _db.Database.ExecuteSqlInterpolatedAsync($"""
+INSERT INTO "UserFcmTokens" ("Id", "UserId", "Token", "CreatedAt", "LastSeenAt", "IsActive")
+VALUES ({id}, {userId}, {token}, {now}, {now}, TRUE)
+ON CONFLICT ("UserId", "Token")
+DO UPDATE SET
+    "LastSeenAt" = EXCLUDED."LastSeenAt",
+    "IsActive" = TRUE;
+""");
 
-                existing.IsActive = true;
-                existing.LastSeenAt = DateTime.UtcNow;
-            }
-
-            await _db.SaveChangesAsync();
             return NoContent();
         }
     }
