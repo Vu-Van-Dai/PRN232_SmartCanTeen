@@ -83,7 +83,7 @@ namespace API.Controllers
             var cancelUrl = string.IsNullOrWhiteSpace(origin) ? null : $"{origin}/payos/cancel";
             var link = await _payos.CreatePaymentLinkAsync(amountInt, orderCode, description, returnUrl, cancelUrl);
 
-            return Ok(new { paymentUrl = link.CheckoutUrl });
+            return Ok(new { paymentUrl = link.CheckoutUrl, qrCode = link.QrCode, checkoutUrl = link.CheckoutUrl });
         }
     }
 }
