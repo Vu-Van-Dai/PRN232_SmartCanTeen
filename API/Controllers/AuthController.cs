@@ -97,7 +97,7 @@ namespace API.Controllers
 
             // Important: do NOT auto-create; account must be provisioned by admin.
             if (user == null)
-                return Unauthorized("Account not found");
+                return Unauthorized(new { message = "USER_NOT_FOUND" });
 
             if (!user.IsActive)
                 return Unauthorized("Account is locked");
