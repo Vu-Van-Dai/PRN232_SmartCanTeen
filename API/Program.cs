@@ -72,6 +72,7 @@ builder.Services.AddScoped<BusinessDayGate>();
 builder.Services.AddHttpClient<PayosService>();
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<PayosPaymentProcessor>();
+builder.Services.AddScoped<PromotionEngine>();
 builder.Services.AddScoped<IInventoryNotifier, InventoryNotifier>();
 builder.Services.AddScoped<OrderSchedulerService>();
 builder.Services.AddHostedService<OrderSchedulerHostedService>();

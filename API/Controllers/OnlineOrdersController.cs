@@ -18,12 +18,14 @@ namespace API.Controllers
         private readonly AppDbContext _db;
         private readonly BusinessDayGate _dayGate;
         private readonly BusinessDayClock _clock;
+        private readonly PromotionEngine _promoEngine;
 
-        public OnlineOrdersController(AppDbContext db, BusinessDayGate dayGate, BusinessDayClock clock)
+        public OnlineOrdersController(AppDbContext db, BusinessDayGate dayGate, BusinessDayClock clock, PromotionEngine promoEngine)
         {
             _db = db;
             _dayGate = dayGate;
             _clock = clock;
+            _promoEngine = promoEngine;
         }
 
         [HttpPost]
@@ -59,7 +61,20 @@ namespace API.Controllers
             );
 
             // LẤY MENU ITEM
-            var itemIds = request.Items.Select(x => x.ItemId).ToList();
+            if (request.Items.Any(x => x.Quantity <= 0))
+                return BadRequest("Invalid quantity");
+
+            var (quote, quoteError) = await _promoEngine.QuoteAsync(
+                request.Items.Select(x => (x.ItemId, x.Quantity)),
+                request.PromoCode,
+                HttpContext.RequestAborted);
+
+            if (quoteError != null)
+                return BadRequest(quoteError);
+
+            var finalLines = quote!.Items;
+
+            var itemIds = finalLines.Select(x => x.itemId).Distinct().ToList();
             var menuItems = await _db.MenuItems
                 .Where(x =>
                     itemIds.Contains(x.Id) &&
@@ -67,12 +82,9 @@ namespace API.Controllers
                     !x.IsDeleted)
                 .ToDictionaryAsync(x => x.Id);
 
-            if (request.Items.Any(x => x.Quantity <= 0))
-                return BadRequest("Invalid quantity");
-
-            decimal grossTotal = 0;
             const decimal vatRate = 0.08m;
-            const decimal discount = 0m;
+            var grossTotal = quote.GrossTotal;
+            var discount = quote.DiscountAmount;
 
             var order = new Order
             {
@@ -95,30 +107,24 @@ namespace API.Controllers
 
             _db.Orders.Add(order);
 
-            foreach (var i in request.Items)
+            foreach (var i in finalLines)
             {
-                if (!menuItems.TryGetValue(i.ItemId, out var item))
-                    return BadRequest($"Item {i.ItemId} not found");
-
-                if (i.Quantity <= 0)
-                    return BadRequest("Invalid quantity");
-
-                grossTotal += item.Price * i.Quantity;
+                if (!menuItems.TryGetValue(i.itemId, out var item))
+                    return BadRequest($"Item {i.itemId} not found");
 
                 _db.OrderItems.Add(new OrderItem
                 {
                     Id = Guid.NewGuid(),
                     OrderId = order.Id,
                     ItemId = item.Id,
-                    Quantity = i.Quantity,
+                    Quantity = i.quantity,
                     CancelledQuantity = 0,
                     Status = item.ProductType == ProductType.ReadyMade ? OrderItemStatus.Completed : OrderItemStatus.Pending,
                     UnitPrice = item.Price
                 });
             }
 
-            var total = decimal.Round(grossTotal - discount, 0, MidpointRounding.AwayFromZero);
-            if (total < 0) total = 0;
+            var total = quote.Total;
 
             var vatAmount = decimal.Round(total * (vatRate / (1m + vatRate)), 0, MidpointRounding.AwayFromZero);
             if (vatAmount < 0) vatAmount = 0;
@@ -135,7 +141,10 @@ namespace API.Controllers
             return Ok(new
             {
                 orderId = order.Id,
-                total = order.TotalPrice
+                total = order.TotalPrice,
+                discountAmount = order.DiscountAmount,
+                appliedPromotionCode = quote.AppliedPromotionCode,
+                appliedPromotionName = quote.AppliedPromotionName
             });
         }
     }

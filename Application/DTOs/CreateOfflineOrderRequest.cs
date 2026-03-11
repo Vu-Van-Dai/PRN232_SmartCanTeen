@@ -10,6 +10,9 @@ namespace Application.DTOs
     {
         public decimal TotalPrice { get; set; }
 
+        // Optional promotion code entered by staff in POS.
+        public string? PromoCode { get; set; }
+
         // POS receipt info (optional).
         public decimal? AmountReceived { get; set; }
         public decimal? ChangeAmount { get; set; }
