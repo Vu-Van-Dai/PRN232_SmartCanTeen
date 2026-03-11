@@ -28,6 +28,7 @@ namespace API.Controllers
         private readonly PayosPaymentProcessor _processor;
         private readonly IMemoryCache _cache;
         private readonly BusinessDayGate _dayGate;
+        private readonly PromotionEngine _promoEngine;
 
         public PosOrderController(
             AppDbContext db,
@@ -36,7 +37,8 @@ namespace API.Controllers
             IHubContext<ManagementHub> managementHub,
             PayosPaymentProcessor processor,
             IMemoryCache cache,
-            BusinessDayGate dayGate)
+            BusinessDayGate dayGate,
+            PromotionEngine promoEngine)
         {
             _db = db;
             _payos = payos;
@@ -45,6 +47,7 @@ namespace API.Controllers
             _processor = processor;
             _cache = cache;
             _dayGate = dayGate;
+            _promoEngine = promoEngine;
         }
 
 
@@ -99,8 +102,18 @@ namespace API.Controllers
 
             _db.Orders.Add(order);
 
+            var (quote, quoteError) = await _promoEngine.QuoteAsync(
+                request.Items.Select(x => (x.ItemId, x.Quantity)),
+                request.PromoCode,
+                HttpContext.RequestAborted);
+
+            if (quoteError != null)
+                return BadRequest(quoteError);
+
+            var finalLines = quote!.Items;
+
             // 3️⃣ TẠO ORDER ITEMS (snapshot giá)
-            var itemIds = request.Items.Select(x => x.ItemId).ToList();
+            var itemIds = finalLines.Select(x => x.itemId).Distinct().ToList();
 
             var menuItems = await _db.MenuItems
                 .Where(x =>
@@ -110,20 +123,17 @@ namespace API.Controllers
                 )
                 .ToDictionaryAsync(x => x.Id);
 
-            foreach (var i in request.Items)
+            foreach (var i in finalLines)
             {
-                if (!menuItems.TryGetValue(i.ItemId, out var item))
-                    return BadRequest($"Item {i.ItemId} not found");
-
-                if (i.Quantity <= 0)
-                    return BadRequest("Invalid quantity");
+                if (!menuItems.TryGetValue(i.itemId, out var item))
+                    return BadRequest($"Item {i.itemId} not found");
 
                 _db.OrderItems.Add(new OrderItem
                 {
                     Id = Guid.NewGuid(),
                     OrderId = order.Id,
                     ItemId = item.Id,
-                    Quantity = i.Quantity,
+                    Quantity = i.quantity,
                     CancelledQuantity = 0,
                     Status = item.ProductType == ProductType.ReadyMade ? OrderItemStatus.Completed : OrderItemStatus.Pending,
                     UnitPrice = item.Price
@@ -132,10 +142,9 @@ namespace API.Controllers
 
             // 3.5️⃣ Compute totals (VAT included in MenuItem.Price)
             const decimal vatRate = 0.08m;
-            var grossTotal = request.Items.Sum(x => menuItems[x.ItemId].Price * x.Quantity);
-            var discount = 0m;
-            var total = decimal.Round(grossTotal - discount, 0, MidpointRounding.AwayFromZero);
-            if (total < 0) total = 0;
+            var grossTotal = quote.GrossTotal;
+            var discount = quote.DiscountAmount;
+            var total = quote.Total;
 
             // VAT portion derived from final total (already VAT-inclusive)
             var vatAmount = decimal.Round(total * (vatRate / (1m + vatRate)), 0, MidpointRounding.AwayFromZero);
@@ -205,7 +214,12 @@ namespace API.Controllers
                 // New fields for in-app POS QR modal
                 checkoutUrl = link.CheckoutUrl,
                 qrCode = link.QrCode,
-                orderCode = link.OrderCode
+                orderCode = link.OrderCode,
+
+                total = order.TotalPrice,
+                discountAmount = order.DiscountAmount,
+                appliedPromotionCode = quote.AppliedPromotionCode,
+                appliedPromotionName = quote.AppliedPromotionName
             });
         }
 
@@ -338,7 +352,17 @@ namespace API.Controllers
 
             _db.Orders.Add(order);
 
-            var itemIds = request.Items.Select(x => x.ItemId).ToList();
+            var (quote, quoteError) = await _promoEngine.QuoteAsync(
+                request.Items.Select(x => (x.ItemId, x.Quantity)),
+                request.PromoCode,
+                HttpContext.RequestAborted);
+
+            if (quoteError != null)
+                return BadRequest(quoteError);
+
+            var finalLines = quote!.Items;
+
+            var itemIds = finalLines.Select(x => x.itemId).Distinct().ToList();
             var menuItems = await _db.MenuItems
                 .Where(x =>
                     itemIds.Contains(x.Id) &&
@@ -346,20 +370,17 @@ namespace API.Controllers
                     x.IsActive)
                 .ToDictionaryAsync(x => x.Id);
 
-            foreach (var i in request.Items)
+            foreach (var i in finalLines)
             {
-                if (!menuItems.TryGetValue(i.ItemId, out var item))
-                    return BadRequest($"Item {i.ItemId} not found");
-
-                if (i.Quantity <= 0)
-                    return BadRequest("Invalid quantity");
+                if (!menuItems.TryGetValue(i.itemId, out var item))
+                    return BadRequest($"Item {i.itemId} not found");
 
                 _db.OrderItems.Add(new OrderItem
                 {
                     Id = Guid.NewGuid(),
                     OrderId = order.Id,
                     ItemId = item.Id,
-                    Quantity = i.Quantity,
+                    Quantity = i.quantity,
                     CancelledQuantity = 0,
                     Status = item.ProductType == ProductType.ReadyMade ? OrderItemStatus.Completed : OrderItemStatus.Pending,
                     UnitPrice = item.Price
@@ -367,7 +388,7 @@ namespace API.Controllers
             }
 
             // If this order has no Prepared items, it should not go to kitchen.
-            var hasPreparedItems = request.Items.Any(x => menuItems[x.ItemId].ProductType == ProductType.Prepared);
+            var hasPreparedItems = finalLines.Any(x => menuItems[x.itemId].ProductType == ProductType.Prepared);
             if (!hasPreparedItems)
             {
                 order.Status = OrderStatus.Completed;
@@ -376,10 +397,9 @@ namespace API.Controllers
 
             // Compute totals (VAT included in MenuItem.Price)
             const decimal vatRate = 0.08m;
-            var grossTotal = request.Items.Sum(x => menuItems[x.ItemId].Price * x.Quantity);
-            var discount = 0m;
-            var total = decimal.Round(grossTotal - discount, 0, MidpointRounding.AwayFromZero);
-            if (total < 0) total = 0;
+            var grossTotal = quote.GrossTotal;
+            var discount = quote.DiscountAmount;
+            var total = quote.Total;
 
             var vatAmount = decimal.Round(total * (vatRate / (1m + vatRate)), 0, MidpointRounding.AwayFromZero);
             if (vatAmount < 0) vatAmount = 0;
@@ -466,7 +486,14 @@ namespace API.Controllers
                     method = PaymentMethod.Cash
                 });
 
-            return Ok(new { orderId = order.Id });
+            return Ok(new
+            {
+                orderId = order.Id,
+                total = order.TotalPrice,
+                discountAmount = order.DiscountAmount,
+                appliedPromotionCode = quote.AppliedPromotionCode,
+                appliedPromotionName = quote.AppliedPromotionName
+            });
         }
 
         /// <summary>

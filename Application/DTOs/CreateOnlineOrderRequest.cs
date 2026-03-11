@@ -7,6 +7,9 @@ namespace Application.DTOs
     {
         public List<CreateOrderItemDto> Items { get; set; } = new();
         public DateTime? PickupTime { get; set; }
+
+        // Optional promotion code entered by user (POS or Online).
+        public string? PromoCode { get; set; }
     }
 
     public class CreateOrderItemDto
